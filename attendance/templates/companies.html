@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Companies Management{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2><i class="fas fa-building me-2"></i>Companies Management</h2>
+        <p class="text-muted">Manage company information and settings</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-success" onclick="showCreateCompanyModal()">
+            <i class="fas fa-plus me-2"></i>Add Company
+        </button>
+    </div>
+</div>
+
+<!-- Companies Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Company List</h5>
+        <div>
+            <span class="badge bg-primary">{{ companies|length }}</span> companies
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Company Name</th>
+                        <th>Description</th>
+                        <th>Created Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for company in companies %}
+                    <tr>
+                        <td><strong>{{ company.id }}</strong></td>
+                        <td>
+                            <span class="badge bg-info text-dark fs-6">{{ company.name }}</span>
+                        </td>
+                        <td>{{ company.description or 'No description' }}</td>
+                        <td>{{ company.created_date }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="showEditCompanyModal({{ company.id }}, '{{ company.name }}', '{{ company.description or '' }}')">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteCompany({{ company.id }}, '{{ company.name }}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Create Company Modal -->
+<div class="modal fade" id="createCompanyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Company</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createCompanyForm">
+                    <div class="mb-3">
+                        <label for="createCompanyName" class="form-label">Company Name</label>
+                        <input type="text" class="form-control" id="createCompanyName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="createCompanyDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="createCompanyDescription" rows="3" placeholder="Optional company description"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" onclick="createCompany()">Add Company</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Company Modal -->
+<div class="modal fade" id="editCompanyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Company</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCompanyForm">
+                    <input type="hidden" id="editCompanyId">
+                    <div class="mb-3">
+                        <label for="editCompanyName" class="form-label">Company Name</label>
+                        <input type="text" class="form-control" id="editCompanyName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editCompanyDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="editCompanyDescription" rows="3" placeholder="Optional company description"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="updateCompany()">Update Company</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showCreateCompanyModal() {
+    new bootstrap.Modal(document.getElementById('createCompanyModal')).show();
+}
+
+function createCompany() {
+    const companyData = {
+        name: document.getElementById('createCompanyName').value,
+        description: document.getElementById('createCompanyDescription').value
+    };
+    
+    fetch('/api/companies', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(companyData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createCompanyModal')).hide();
+            // Refresh the page to show new company
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Error creating company', 'danger');
+    });
+}
+
+function showEditCompanyModal(companyId, companyName, companyDescription) {
+    document.getElementById('editCompanyId').value = companyId;
+    document.getElementById('editCompanyName').value = companyName;
+    document.getElementById('editCompanyDescription').value = companyDescription;
+    
+    new bootstrap.Modal(document.getElementById('editCompanyModal')).show();
+}
+
+function updateCompany() {
+    const companyId = document.getElementById('editCompanyId').value;
+    const companyData = {
+        name: document.getElementById('editCompanyName').value,
+        description: document.getElementById('editCompanyDescription').value
+    };
+    
+    fetch(`/api/companies/${companyId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(companyData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            bootstrap.Modal.getInstance(document.getElementById('editCompanyModal')).hide();
+            // Refresh the page to show updated data
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showAlert(data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('Error updating company', 'danger');
+    });
+}
+
+function deleteCompany(companyId, companyName) {
+    if (confirm(`Are you sure you want to delete company "${companyName}"? This action cannot be undone.`)) {
+        fetch(`/api/companies/${companyId}`, {
+            method: 'DELETE'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                // Refresh the page to show updated data
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Error deleting company', 'danger');
+        });
+    }
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container');
+    const firstRow = container.querySelector('.row');
+    container.insertBefore(alertDiv, firstRow);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

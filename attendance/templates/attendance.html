@@ -1,0 +1,720 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Records{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Left Side Navigation -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-tachometer-alt me-2"></i>Quick Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="/dashboard" class="btn btn-outline-primary">
+                        <i class="fas fa-home me-2"></i>Dashboard
+                    </a>
+                    <a href="/users" class="btn btn-outline-success">
+                        <i class="fas fa-users me-2"></i>Manage Users
+                    </a>
+                    <a href="/companies" class="btn btn-outline-info">
+                        <i class="fas fa-building me-2"></i>Manage Companies
+                    </a>
+                    <a href="/device" class="btn btn-outline-warning">
+                        <i class="fas fa-server me-2"></i>Device Management
+                    </a>
+                </div>
+                
+                <hr>
+                
+                <h6 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h6>
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="border rounded p-2 mb-2">
+                            <small class="text-muted d-block">Total Records</small>
+                            <strong class="text-primary">{{ records|length }}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="border rounded p-2 mb-2">
+                            <small class="text-muted d-block">Today's Date</small>
+                            <strong class="text-success">{{ today }}</strong>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <h6 class="mb-3"><i class="fas fa-filter me-2"></i>Filter Presets</h6>
+                <div class="d-grid gap-2">
+                    <a href="/attendance" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-list me-1"></i>All Records
+                    </a>
+                    <a href="/attendance?date={{ today }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-calendar-day me-1"></i>Today Only
+                    </a>
+                    <a href="/attendance?company_id=1" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-building me-1"></i>Main Company
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="col-md-9">
+        <div class="row mb-4">
+            <div class="col-12">
+                <h2><i class="fas fa-calendar-check me-2"></i>Attendance Records</h2>
+                <p class="text-muted">View and filter employee attendance records</p>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Records</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="/attendance" class="row g-3">
+                    <div class="col-md-3">
+                        <label for="user_id" class="form-label">Filter by Employee</label>
+                        <select class="form-select" id="user_id" name="user_id">
+                            <option value="">All Employees</option>
+                            {% for user in users %}
+                            <option value="{{ user.userid }}" {% if user.userid|string == selected_user %}selected{% endif %}>
+                                {{ user.name }} (ID: {{ user.userid }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="date" class="form-label">Filter by Date</label>
+                        <input type="date" class="form-control" id="date" name="date" value="{{ selected_date }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="company_id" class="form-label">Filter by Company</label>
+                        <select class="form-select" id="company_id" name="company_id">
+                            <option value="">All Companies</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}" {% if company.id|string == selected_company %}selected{% endif %}>
+                                {{ company.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="d-grid gap-2 w-100">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-2"></i>Apply Filters
+                            </button>
+                            <a href="/attendance" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Clear Filters
+                            </a>
+                            <button type="button" class="btn btn-warning" onclick="recalculateWorkingHours()">
+                                <i class="fas fa-calculator me-2"></i>Recalculate Hours
+                            </button>
+                            <button type="button" class="btn btn-info" onclick="debugNightShiftTimes()">
+                                <i class="fas fa-bug me-2"></i>Debug Night Shifts
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="addSampleData()">
+                                <i class="fas fa-plus me-2"></i>Add Sample Data
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fas fa-table me-2"></i>Attendance Records</h5>
+                <div>
+                    <span class="badge bg-primary">{{ records|length }}</span> records found
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Employee Name</th>
+                                <th>Company</th>
+                                <th>Date</th>
+                                <th>Check In</th>
+                                <th>Check Out</th>
+                                <th>Working Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in records %}
+                            <tr>
+                                <td>
+                                    <strong>{{ record.name }}</strong>
+                                    <br><small class="text-muted">ID: {{ record.userid }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info text-dark">{{ record.company_name or 'N/A' }}</span>
+                                </td>
+                                <td>
+                                    {% if record.timestamp %}
+                                        {% set date_parts = record.timestamp.split(' ') %}
+                                        {% if date_parts|length > 1 %}
+                                            <strong>{{ date_parts[0] }}</strong><br>
+                                            <small class="text-muted">{{ date_parts[1] }}</small>
+                                        {% else %}
+                                            {{ record.timestamp }}
+                                        {% endif %}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if record.check_in %}
+                                        {% if ' ' in record.check_in %}
+                                            {% set time_part = record.check_in.split(' ')[1] %}
+                                            <span class="badge bg-success">{{ time_part }}</span>
+                                        {% else %}
+                                            <span class="badge bg-success">{{ record.check_in }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Not checked in</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if record.check_out %}
+                                        {% if ' ' in record.check_out %}
+                                            {% set time_part = record.check_out.split(' ')[1] %}
+                                            <span class="badge bg-warning text-dark">{{ time_part }}</span>
+                                        {% else %}
+                                            <span class="badge bg-warning text-dark">{{ record.check_out }}</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Not checked out</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if record.working_hours %}
+                                        {% if record.working_hours > 0 %}
+                                            <span class="badge bg-primary">{{ "%.2f"|format(record.working_hours) }} hours</span>
+                                        {% else %}
+                                            <span class="text-muted">0.00 hours</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Calculating...</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.avatar-circle {
+    width: 35px;
+    height: 35px;
+    background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+#attendanceTable tbody tr:hover {
+    background-color: rgba(52, 152, 219, 0.1);
+    transform: scale(1.01);
+    transition: all 0.2s ease;
+}
+
+.badge {
+    font-size: 0.8rem;
+}
+</style>
+
+<script>
+function pullLatestData(event) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
+    button.disabled = true;
+    
+    // Show alert
+    showAlert('Pulling latest data from device...', 'info');
+    
+    // Pull latest data
+    fetch('/api/pull_latest_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Refresh the page to show updated data
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert(data.message, 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        showAlert('Error syncing data: ' + error.message, 'danger');
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+// Search functionality
+document.getElementById('searchInput').addEventListener('keyup', function() {
+    const searchTerm = this.value.toLowerCase();
+    const table = document.getElementById('attendanceTable');
+    const rows = table.getElementsByTagName('tbody')[0].getElementsByTagName('tr');
+    
+    for (let row of rows) {
+        const name = row.cells[0].textContent.toLowerCase();
+        const date = row.cells[1].textContent.toLowerCase();
+        const checkIn = row.cells[2].textContent.toLowerCase();
+        
+        if (name.includes(searchTerm) || date.includes(searchTerm) || checkIn.includes(searchTerm)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    }
+});
+
+function exportAttendance(event) {
+    // Create CSV content
+    let csv = 'Employee Name,Employee ID,Date,Check-in Time,Check-out Time,Status,Working Hours\n';
+    const rows = document.querySelectorAll('#attendanceTable tbody tr');
+    
+    rows.forEach(row => {
+        const name = row.cells[0].textContent.trim().split('\n')[0]; // Get just the name
+        const employeeId = row.cells[0].textContent.trim().split('ID: ')[1] || 'N/A'; // Get employee ID
+        const date = row.cells[1].textContent.trim();
+        const checkIn = row.cells[2].textContent.trim();
+        const checkOut = row.cells[3].textContent.trim();
+        const status = row.cells[4].textContent.trim();
+        const workingHours = row.cells[5].textContent.trim();
+        
+        csv += `"${name}","${employeeId}","${date}","${checkIn}","${checkOut}","${status}","${workingHours}"\n`;
+    });
+    
+    // Download CSV file
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'attendance_export.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    showAlert('Attendance data exported successfully!', 'success');
+}
+
+function refreshData(event) {
+    location.reload();
+}
+
+function processAttendance(event) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+    button.disabled = true;
+    
+    // Show alert
+    showAlert('Processing attendance records to pair check-ins and check-outs...', 'info');
+    
+    // Process attendance records
+    fetch('/api/process_attendance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Refresh the page to show updated data
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert(data.message, 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        showAlert('Error processing records: ' + error.message, 'danger');
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function fixAttendance(event) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Fixing...';
+    button.disabled = true;
+    
+    // Show alert
+    showAlert('Attempting to fix incorrect attendance records...', 'warning');
+    
+    // Fetch and process fix data
+    fetch('/api/fix_attendance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Refresh the page to show updated data
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert(data.message, 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        showAlert('Error fixing records: ' + error.message, 'danger');
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function cleanupDuplicates(event) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Cleaning...';
+    button.disabled = true;
+    
+    // Show alert
+    showAlert('Attempting to clean up duplicate attendance records...', 'warning');
+    
+    // Fetch and process cleanup data
+    fetch('/api/cleanup_duplicates', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Refresh the page to show updated data
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert(data.message, 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        showAlert('Error cleaning up duplicates: ' + error.message, 'danger');
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Find the first row element or fallback to container
+    const firstRow = document.querySelector('.row');
+    const container = document.querySelector('.container');
+    
+    if (firstRow && firstRow.parentNode === container) {
+        container.insertBefore(alertDiv, firstRow);
+    } else {
+        // Fallback: insert at the beginning of container
+        container.insertBefore(alertDiv, container.firstChild);
+    }
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Auto-refresh every 5 minutes
+setInterval(refreshData, 300000);
+
+// Calculate total working hours when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    calculateTotalWorkingHours();
+});
+
+function calculateTotalWorkingHours() {
+    const rows = document.querySelectorAll('#attendanceTable tbody tr');
+    let totalHours = 0;
+    let completedRecords = 0;
+    
+    rows.forEach(row => {
+        const workingHoursCell = row.cells[5]; // Working Hours column
+        
+        if (workingHoursCell.textContent !== 'N/A' && workingHoursCell.textContent !== 'Calculating...') {
+            completedRecords++;
+            
+            // Extract hours from the cell text (e.g., "9.21 hours")
+            const hoursText = workingHoursCell.textContent.trim();
+            const hoursMatch = hoursText.match(/(\d+\.?\d*)/);
+            
+            if (hoursMatch) {
+                const hours = parseFloat(hoursMatch[1]);
+                if (!isNaN(hours)) {
+                    totalHours += hours;
+                }
+            }
+        }
+    });
+    
+    const totalWorkingHoursElement = document.getElementById('totalWorkingHours');
+    if (totalWorkingHoursElement) {
+        if (completedRecords > 0) {
+            totalWorkingHoursElement.textContent = `${totalHours.toFixed(2)} hours`;
+        } else {
+            totalWorkingHoursElement.textContent = '0.00 hours';
+        }
+    }
+}
+
+// Auto-submit form when filters change (optional)
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listeners for filter changes
+    const filters = ['user_id', 'date', 'company_id'];
+    
+    filters.forEach(filterId => {
+        const element = document.getElementById(filterId);
+        if (element) {
+            element.addEventListener('change', function() {
+                // Auto-submit form when filter changes
+                // Uncomment the line below if you want auto-submit
+                // this.form.submit();
+            });
+        }
+    });
+    
+    // Add clear individual filter functionality
+    filters.forEach(filterId => {
+        const element = document.getElementById(filterId);
+        if (element) {
+            // Add clear button for each filter
+            const clearButton = document.createElement('button');
+            clearButton.type = 'button';
+            clearButton.className = 'btn btn-sm btn-outline-secondary mt-1';
+            clearButton.innerHTML = '<i class="fas fa-times"></i> Clear';
+            clearButton.onclick = function() {
+                element.value = '';
+                // Optionally auto-submit
+                // element.form.submit();
+            };
+            
+            // Insert clear button after the filter element
+            element.parentNode.appendChild(clearButton);
+        }
+    });
+});
+
+// Function to show current active filters
+function showActiveFilters() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const activeFilters = [];
+    
+    if (urlParams.get('user_id')) {
+        const userId = urlParams.get('user_id');
+        const userSelect = document.getElementById('user_id');
+        const selectedOption = userSelect.querySelector(`option[value="${userId}"]`);
+        if (selectedOption) {
+            activeFilters.push(`Employee: ${selectedOption.textContent}`);
+        }
+    }
+    
+    if (urlParams.get('date')) {
+        activeFilters.push(`Date: ${urlParams.get('date')}`);
+    }
+    
+    if (urlParams.get('company_id')) {
+        const companyId = urlParams.get('company_id');
+        const companySelect = document.getElementById('company_id');
+        const selectedOption = companySelect.querySelector(`option[value="${companyId}"]`);
+        if (selectedOption) {
+            activeFilters.push(`Company: ${selectedOption.textContent}`);
+        }
+    }
+    
+    if (activeFilters.length > 0) {
+        const filterInfo = document.createElement('div');
+        filterInfo.className = 'alert alert-info alert-dismissible fade show mb-3';
+        filterInfo.innerHTML = `
+            <strong>Active Filters:</strong> ${activeFilters.join(', ')}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container');
+        const firstRow = container.querySelector('.row');
+        container.insertBefore(filterInfo, firstRow);
+    }
+}
+
+// Show active filters when page loads
+document.addEventListener('DOMContentLoaded', showActiveFilters);
+
+function recalculateWorkingHours() {
+    if (confirm('This will recalculate working hours for all attendance records. This may take a few moments. Continue?')) {
+        // Show loading state
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Recalculating...';
+        button.disabled = true;
+        
+        // Call API to recalculate
+        fetch('/api/recalculate_working_hours', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                // Refresh the page to show updated working hours
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showAlert(data.message, 'danger');
+                // Reset button
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Error recalculating working hours', 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+
+function debugNightShiftTimes() {
+    // Get all night shift employees from the table
+    const rows = document.querySelectorAll('table tbody tr');
+    const nightShiftEmployees = [];
+    
+    rows.forEach(row => {
+        const companyCell = row.querySelector('td:nth-child(2)');
+        if (companyCell && companyCell.textContent.includes('Absolute Global Outsourcing')) {
+            const nameCell = row.querySelector('td:nth-child(1)');
+            if (nameCell) {
+                nightShiftEmployees.push({
+                    name: nameCell.textContent.trim()
+                });
+            }
+        }
+    });
+    
+    // Show debug information
+    let debugInfo = 'Night Shift Employees Found:\n\n';
+    nightShiftEmployees.forEach(emp => {
+        debugInfo += `• ${emp.name}\n`;
+    });
+    
+    debugInfo += '\nCheck the attendance records above to verify:\n';
+    debugInfo += '1. Check-in times should be earlier than check-out times\n';
+    debugInfo += '2. For true night shifts: check-in evening, check-out next morning\n';
+    debugInfo += '3. For same-day night shifts: check-in early morning, check-out evening\n';
+    debugInfo += '\nIf times appear swapped, the system will now correct them automatically.';
+    
+    alert(debugInfo);
+}
+
+function addSampleData() {
+    if (confirm('This will add sample attendance data to your database. This is for testing purposes only. Continue?')) {
+        // Show loading state
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
+        button.disabled = true;
+        
+        // Show alert
+        showAlert('Adding sample data...', 'info');
+        
+        // Call API to add sample data
+        fetch('/api/add_sample_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                // Refresh the page to show updated data
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                showAlert(data.message, 'danger');
+                // Reset button
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            showAlert('Error adding sample data: ' + error.message, 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+</script>
+{% endblock %}
