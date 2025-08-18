@@ -3,216 +3,162 @@
 {% block title %}Attendance Records{% endblock %}
 
 {% block content %}
-<div class="row">
-    <!-- Left Side Navigation -->
-    <div class="col-md-3">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-tachometer-alt me-2"></i>Quick Actions</h5>
-            </div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="/dashboard" class="btn btn-outline-primary">
-                        <i class="fas fa-home me-2"></i>Dashboard
-                    </a>
-                    <a href="/users" class="btn btn-outline-success">
-                        <i class="fas fa-users me-2"></i>Manage Users
-                    </a>
-                    <a href="/companies" class="btn btn-outline-info">
-                        <i class="fas fa-building me-2"></i>Manage Companies
-                    </a>
-                    <a href="/device" class="btn btn-outline-warning">
-                        <i class="fas fa-server me-2"></i>Device Management
-                    </a>
-                </div>
-                
-                <hr>
-                
-                <h6 class="mb-3"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h6>
-                <div class="row text-center">
-                    <div class="col-6">
-                        <div class="border rounded p-2 mb-2">
-                            <small class="text-muted d-block">Total Records</small>
-                            <strong class="text-primary">{{ records|length }}</strong>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="border rounded p-2 mb-2">
-                            <small class="text-muted d-block">Today's Date</small>
-                            <strong class="text-success">{{ today }}</strong>
-                        </div>
-                    </div>
-                </div>
-                
-                <hr>
-                
-                <h6 class="mb-3"><i class="fas fa-filter me-2"></i>Filter Presets</h6>
-                <div class="d-grid gap-2">
-                    <a href="/attendance" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-list me-1"></i>All Records
-                    </a>
-                    <a href="/attendance?date={{ today }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-calendar-day me-1"></i>Today Only
-                    </a>
-                    <a href="/attendance?company_id=1" class="btn btn-sm btn-outline-secondary">
-                        <i class="fas fa-building me-1"></i>Main Company
-                    </a>
-                </div>
-            </div>
-        </div>
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-calendar-check me-2"></i>Attendance Records</h2>
+        <p class="text-muted">View and filter employee attendance records</p>
     </div>
-    
-    <!-- Main Content -->
-    <div class="col-md-9">
-        <div class="row mb-4">
-            <div class="col-12">
-                <h2><i class="fas fa-calendar-check me-2"></i>Attendance Records</h2>
-                <p class="text-muted">View and filter employee attendance records</p>
-            </div>
-        </div>
+</div>
 
-        <!-- Filters -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Records</h5>
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Records</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="/attendance" class="row g-3">
+            <div class="col-md-3">
+                <label for="user_id" class="form-label">Filter by Employee</label>
+                <select class="form-select" id="user_id" name="user_id">
+                    <option value="">All Employees</option>
+                    {% for user in users %}
+                    <option value="{{ user.userid }}" {% if user.userid|string == selected_user %}selected{% endif %}>
+                        {{ user.name }} (ID: {{ user.userid }})
+                    </option>
+                    {% endfor %}
+                </select>
             </div>
+            <div class="col-md-3">
+                <label for="date" class="form-label">Filter by Date</label>
+                <input type="date" class="form-control" id="date" name="date" value="{{ selected_date }}">
+            </div>
+            <div class="col-md-3">
+                <label for="company_id" class="form-label">Filter by Company</label>
+                <select class="form-select" id="company_id" name="company_id">
+                    <option value="">All Companies</option>
+                    {% for company in companies %}
+                    <option value="{{ company.id }}" {% if company.id|string == selected_company %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
             <div class="card-body">
-                <form method="GET" action="/attendance" class="row g-3">
+                <div class="row">
                     <div class="col-md-3">
-                        <label for="user_id" class="form-label">Filter by Employee</label>
-                        <select class="form-select" id="user_id" name="user_id">
-                            <option value="">All Employees</option>
-                            {% for user in users %}
-                            <option value="{{ user.userid }}" {% if user.userid|string == selected_user %}selected{% endif %}>
-                                {{ user.name }} (ID: {{ user.userid }})
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label for="date" class="form-label">Filter by Date</label>
-                        <input type="date" class="form-control" id="date" name="date" value="{{ selected_date }}">
-                    </div>
-                    <div class="col-md-3">
-                        <label for="company_id" class="form-label">Filter by Company</label>
-                        <select class="form-select" id="company_id" name="company_id">
-                            <option value="">All Companies</option>
-                            {% for company in companies %}
-                            <option value="{{ company.id }}" {% if company.id|string == selected_company %}selected{% endif %}>
-                                {{ company.name }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <div class="d-grid gap-2 w-100">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-search me-2"></i>Apply Filters
-                            </button>
-                            <a href="/attendance" class="btn btn-outline-secondary">
-                                <i class="fas fa-times me-2"></i>Clear Filters
-                            </a>
-                            <button type="button" class="btn btn-warning" onclick="recalculateWorkingHours()">
+                        <div class="d-grid">
+                            <button class="btn btn-success" onclick="recalculateWorkingHours()">
                                 <i class="fas fa-calculator me-2"></i>Recalculate Hours
                             </button>
-                            <button type="button" class="btn btn-info" onclick="debugNightShiftTimes()">
-                                <i class="fas fa-bug me-2"></i>Debug Night Shifts
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-info" onclick="testReversedTimes()">
+                                <i class="fas fa-clock me-2"></i>Test Night Shift Logic
                             </button>
-                            <button type="button" class="btn btn-secondary" onclick="addSampleData()">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-warning" onclick="addSampleData()">
                                 <i class="fas fa-plus me-2"></i>Add Sample Data
                             </button>
                         </div>
                     </div>
-                </form>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button class="btn btn-secondary" onclick="exportToCSV()">
+                                <i class="fas fa-download me-2"></i>Export CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
+    </div>
+</div>
 
-        <!-- Attendance Table -->
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-table me-2"></i>Attendance Records</h5>
-                <div>
-                    <span class="badge bg-primary">{{ records|length }}</span> records found
-                </div>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Employee Name</th>
-                                <th>Company</th>
-                                <th>Date</th>
-                                <th>Check In</th>
-                                <th>Check Out</th>
-                                <th>Working Hours</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for record in records %}
-                            <tr>
-                                <td>
-                                    <strong>{{ record.name }}</strong>
-                                    <br><small class="text-muted">ID: {{ record.userid }}</small>
-                                </td>
-                                <td>
-                                    <span class="badge bg-info text-dark">{{ record.company_name or 'N/A' }}</span>
-                                </td>
-                                <td>
-                                    {% if record.timestamp %}
-                                        {% set date_parts = record.timestamp.split(' ') %}
-                                        {% if date_parts|length > 1 %}
-                                            <strong>{{ date_parts[0] }}</strong><br>
-                                            <small class="text-muted">{{ date_parts[1] }}</small>
-                                        {% else %}
-                                            {{ record.timestamp }}
-                                        {% endif %}
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if record.check_in %}
-                                        {% if ' ' in record.check_in %}
-                                            {% set time_part = record.check_in.split(' ')[1] %}
-                                            <span class="badge bg-success">{{ time_part }}</span>
-                                        {% else %}
-                                            <span class="badge bg-success">{{ record.check_in }}</span>
-                                        {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">Not checked in</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if record.check_out %}
-                                        {% if ' ' in record.check_out %}
-                                            {% set time_part = record.check_out.split(' ')[1] %}
-                                            <span class="badge bg-warning text-dark">{{ time_part }}</span>
-                                        {% else %}
-                                            <span class="badge bg-warning text-dark">{{ record.check_out }}</span>
-                                        {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">Not checked out</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if record.working_hours %}
-                                        {% if record.working_hours > 0 %}
-                                            <span class="badge bg-primary">{{ "%.2f"|format(record.working_hours) }} hours</span>
-                                        {% else %}
-                                            <span class="text-muted">0.00 hours</span>
-                                        {% endif %}
-                                    {% else %}
-                                        <span class="text-muted">Calculating...</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+<!-- Attendance Records Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-table me-2"></i>Attendance Records
+            <span class="badge bg-primary ms-2">{{ records|length }} records found</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if records %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Company</th>
+                        <th>Date</th>
+                        <th>Check In</th>
+                        <th>Check Out</th>
+                        <th>Working Hours</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td>{{ record.userid }}</td>
+                        <td>{{ record.name }}</td>
+                        <td>{{ record.company_name }}</td>
+                        <td>{{ record.date }}</td>
+                        <td>{{ record.check_in_time }}</td>
+                        <td>{{ record.check_out_time or 'Not checked out' }}</td>
+                        <td>
+                            {% if record.working_hours %}
+                                {{ "%.2f"|format(record.working_hours) }} hours
+                            {% else %}
+                                <span class="text-muted">Calculating...</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if record.status %}
+                                <span class="badge bg-{{ 'success' if record.status == 'present' else 'warning' if record.status == 'absent' else 'info' }}">
+                                    {{ record.status|title }}
+                                </span>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No attendance records found</h5>
+            <p class="text-muted">Try adjusting your filters or add some sample data.</p>
+            <button class="btn btn-primary" onclick="addSampleData()">
+                <i class="fas fa-plus me-2"></i>Add Sample Data
+            </button>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -606,14 +552,7 @@ function showActiveFilters() {
 document.addEventListener('DOMContentLoaded', showActiveFilters);
 
 function recalculateWorkingHours() {
-    if (confirm('This will recalculate working hours for all attendance records. This may take a few moments. Continue?')) {
-        // Show loading state
-        const button = event.target;
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Recalculating...';
-        button.disabled = true;
-        
-        // Call API to recalculate
+    if (confirm('This will recalculate working hours for all attendance records. Continue?')) {
         fetch('/api/recalculate_working_hours', {
             method: 'POST',
             headers: {
@@ -623,22 +562,17 @@ function recalculateWorkingHours() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showAlert(data.message, 'success');
-                // Refresh the page to show updated working hours
-                setTimeout(() => location.reload(), 2000);
+                showAlert('success', 'Working hours recalculated successfully!');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
             } else {
-                showAlert(data.message, 'danger');
-                // Reset button
-                button.innerHTML = originalText;
-                button.disabled = false;
+                showAlert('danger', data.message || 'Error recalculating working hours');
             }
         })
         .catch(error => {
+            showAlert('danger', 'Error recalculating working hours');
             console.error('Error:', error);
-            showAlert('Error recalculating working hours', 'danger');
-            // Reset button
-            button.innerHTML = originalText;
-            button.disabled = false;
         });
     }
 }
@@ -676,17 +610,7 @@ function debugNightShiftTimes() {
 }
 
 function addSampleData() {
-    if (confirm('This will add sample attendance data to your database. This is for testing purposes only. Continue?')) {
-        // Show loading state
-        const button = event.target;
-        const originalText = button.innerHTML;
-        button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
-        button.disabled = true;
-        
-        // Show alert
-        showAlert('Adding sample data...', 'info');
-        
-        // Call API to add sample data
+    if (confirm('This will add sample attendance records. Continue?')) {
         fetch('/api/add_sample_data', {
             method: 'POST',
             headers: {
@@ -696,25 +620,60 @@ function addSampleData() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showAlert(data.message, 'success');
-                // Refresh the page to show updated data
+                showAlert('success', 'Sample data added successfully!');
                 setTimeout(() => {
-                    location.reload();
-                }, 2000);
+                    window.location.reload();
+                }, 1500);
             } else {
-                showAlert(data.message, 'danger');
-                // Reset button
-                button.innerHTML = originalText;
-                button.disabled = false;
+                showAlert('danger', data.message || 'Error adding sample data');
             }
         })
         .catch(error => {
-            showAlert('Error adding sample data: ' + error.message, 'danger');
-            // Reset button
-            button.innerHTML = originalText;
-            button.disabled = false;
+            showAlert('danger', 'Error adding sample data');
+            console.error('Error:', error);
         });
     }
+}
+
+function testReversedTimes() {
+    if (confirm('This will test the night shift time reversal logic. Continue?')) {
+        fetch('/api/test_reversed_times', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert('success', 'Night shift logic test completed! Check console for details.');
+                console.log('Test results:', data);
+            } else {
+                showAlert('danger', data.message || 'Error testing night shift logic');
+            }
+        })
+        .catch(error => {
+            showAlert('danger', 'Error testing night shift logic');
+            console.error('Error:', error);
+        });
+    }
+}
+
+function exportToCSV() {
+    // Get current filter values
+    const userId = document.getElementById('user_id').value;
+    const date = document.getElementById('date').value;
+    const companyId = document.getElementById('company_id').value;
+    
+    // Build export URL
+    let url = '/api/export_attendance?';
+    if (userId) url += `user_id=${userId}&`;
+    if (date) url += `date=${date}&`;
+    if (companyId) url += `company_id=${companyId}&`;
+    
+    // Remove trailing & and open in new tab
+    url = url.replace(/&$/, '');
+    window.open(url, '_blank');
 }
 </script>
 {% endblock %}

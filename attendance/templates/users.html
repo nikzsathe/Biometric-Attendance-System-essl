@@ -9,9 +9,13 @@
         <p class="text-muted">Manage employee information and shift configurations</p>
     </div>
     <div class="col-md-4 text-end">
-        <button class="btn btn-success" onclick="showCreateUserModal()">
+        <button class="btn btn-success me-2" onclick="showCreateUserModal()">
             <i class="fas fa-plus me-2"></i>Add Employee
         </button>
+        <button class="btn btn-info me-2" onclick="syncUsersFromDevice()">
+            <i class="fas fa-sync me-2"></i>Sync from Device
+        </button>
+
     </div>
 </div>
 
@@ -86,6 +90,7 @@
                         <th>Shift Type</th>
                         <th>Shift Times</th>
                         <th>Daily Hours</th>
+                        <th>Monthly Salary</th>
                         <th>Created</th>
                         <th>Actions</th>
                     </tr>
@@ -103,6 +108,7 @@
                         </td>
                         <td>{{ user.shift_start_time }} - {{ user.shift_end_time }}</td>
                         <td>{{ user.working_hours_per_day }} hours</td>
+                        <td>₹{{ user.monthly_salary }}</td>
                         <td>{{ user.created_date }}</td>
                         <td>
                             <button class="btn btn-sm btn-primary" onclick="showEditUserModal({{ user.userid }})">
@@ -110,6 +116,9 @@
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="deleteUser({{ user.userid }})">
                                 <i class="fas fa-trash"></i>
+                            </button>
+                            <button class="btn btn-sm btn-success" onclick="pushUserToDevice({{ user.userid }})" title="Push to Device">
+                                <i class="fas fa-upload"></i>
                             </button>
                         </td>
                     </tr>
@@ -164,6 +173,12 @@
                         <div class="col-md-6">
                             <label for="editUserWorkingHours" class="form-label">Daily Working Hours</label>
                             <input type="number" class="form-control" id="editUserWorkingHours" step="0.5" min="0" max="24" value="8.0" required>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="editUserMonthlySalary" class="form-label">Monthly Salary (₹)</label>
+                            <input type="number" class="form-control" id="editUserMonthlySalary" step="100" min="0" value="15000" required>
                         </div>
                     </div>
                 </form>
@@ -225,6 +240,12 @@
                         <div class="col-md-6">
                             <label for="createUserWorkingHours" class="form-label">Daily Working Hours</label>
                             <input type="number" class="form-control" id="createUserWorkingHours" step="0.5" min="0" max="24" value="8.0" required>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <label for="createUserMonthlySalary" class="form-label">Monthly Salary (₹)</label>
+                            <input type="number" class="form-control" id="createUserMonthlySalary" step="100" min="0" value="15000" required>
                         </div>
                     </div>
                 </form>
@@ -326,86 +347,6 @@ function clearFilters() {
     updateUserCount();
 }
 
-function updateUserCount() {
-    document.getElementById('userCount').textContent = filteredUsers.length;
-}
-
-function attachEventHandlers() {
-    // Reattach edit and delete button handlers
-    document.querySelectorAll('.btn-primary[onclick*="showEditUserModal"]').forEach(btn => {
-        btn.onclick = function() {
-            const userId = this.closest('tr').dataset.userid;
-            showEditUserModal(userId);
-        };
-    });
-    
-    document.querySelectorAll('.btn-danger[onclick*="deleteUser"]').forEach(btn => {
-        btn.onclick = function() {
-            const userId = this.closest('tr').dataset.userid;
-            deleteUser(userId);
-        };
-    });
-}
-
-function exportUsers() {
-    const csvContent = generateCSV();
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'users_export.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-function generateCSV() {
-    const headers = ['User ID', 'Name', 'Company', 'Shift Type', 'Shift Start', 'Shift End', 'Daily Hours', 'Created Date'];
-    const rows = filteredUsers.map(user => {
-        const row = document.querySelector(`tr[data-userid="${user.userid}"]`);
-        const cells = row.querySelectorAll('td');
-        return [
-            cells[0].textContent.trim(),
-            cells[1].textContent.trim(),
-            cells[2].textContent.trim(),
-            cells[3].textContent.trim(),
-            cells[4].textContent.trim().split(' - ')[0],
-            cells[4].textContent.trim().split(' - ')[1],
-            cells[5].textContent.trim(),
-            cells[6].textContent.trim()
-        ];
-    });
-    
-    return [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
-}
-
-function showEditUserModal(userId) {
-    // Fetch user data and populate modal
-    fetch(`/api/users/${userId}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const user = data.user;
-                document.getElementById('editUserId').value = user.userid;
-                document.getElementById('editUserName').value = user.name;
-                document.getElementById('editUserCompany').value = user.company_name;
-                document.getElementById('editUserShiftStart').value = user.shift_start_time;
-                document.getElementById('editUserShiftEnd').value = user.shift_end_time;
-                document.getElementById('editUserShiftType').value = user.shift_type;
-                document.getElementById('editUserWorkingHours').value = user.working_hours_per_day;
-                
-                new bootstrap.Modal(document.getElementById('editUserModal')).show();
-            } else {
-                showAlert('Error loading user data', 'danger');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showAlert('Error loading user data', 'danger');
-        });
-}
-
 function updateUser() {
     const userId = document.getElementById('editUserId').value;
     const userData = {
@@ -414,7 +355,8 @@ function updateUser() {
         shift_start_time: document.getElementById('editUserShiftStart').value,
         shift_end_time: document.getElementById('editUserShiftEnd').value,
         shift_type: document.getElementById('editUserShiftType').value,
-        working_hours_per_day: parseFloat(document.getElementById('editUserWorkingHours').value)
+        working_hours_per_day: parseFloat(document.getElementById('editUserWorkingHours').value),
+        monthly_salary: parseFloat(document.getElementById('editUserMonthlySalary').value)
     };
     
     fetch(`/api/users/${userId}`, {
@@ -427,8 +369,15 @@ function updateUser() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // Close modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editUserModal'));
+            if (modal) {
+                modal.hide();
+            }
+            
+            // Show success alert
             showAlert(data.message, 'success');
-            bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+            
             // Refresh the page to show updated data
             setTimeout(() => location.reload(), 1500);
         } else {
@@ -453,7 +402,8 @@ function createUser() {
         shift_start_time: document.getElementById('createUserShiftStart').value,
         shift_end_time: document.getElementById('createUserShiftEnd').value,
         shift_type: document.getElementById('createUserShiftType').value,
-        working_hours_per_day: parseFloat(document.getElementById('createUserWorkingHours').value)
+        working_hours_per_day: parseFloat(document.getElementById('createUserWorkingHours').value),
+                    monthly_salary: parseFloat(document.getElementById('createUserMonthlySalary').value)
     };
     
     fetch('/api/users', {
@@ -503,16 +453,20 @@ function deleteUser(userId) {
 }
 
 function showAlert(message, type) {
+    // Create alert element
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
     alertDiv.innerHTML = `
-        ${message}
+        <div class="d-flex align-items-center">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+            <span>${message}</span>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     `;
     
-    const container = document.querySelector('.container');
-    const firstRow = container.querySelector('.row');
-    container.insertBefore(alertDiv, firstRow);
+    // Add to body
+    document.body.appendChild(alertDiv);
     
     // Auto-remove after 5 seconds
     setTimeout(() => {
@@ -520,6 +474,191 @@ function showAlert(message, type) {
             alertDiv.remove();
         }
     }, 5000);
+    
+
 }
+
+function updateUserCount() {
+    document.getElementById('userCount').textContent = filteredUsers.length;
+}
+
+function attachEventHandlers() {
+    // Reattach edit and delete button handlers
+    document.querySelectorAll('.btn-primary[onclick*="showEditUserModal"]').forEach(btn => {
+        btn.onclick = function() {
+            const userId = this.closest('tr').dataset.userid;
+            showEditUserModal(userId);
+        };
+    });
+    
+    document.querySelectorAll('.btn-danger[onclick*="deleteUser"]').forEach(btn => {
+        btn.onclick = function() {
+            const userId = this.closest('tr').dataset.userid;
+            deleteUser(userId);
+        };
+    });
+}
+
+function exportUsers() {
+    const csvContent = generateCSV();
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'users_export.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function generateCSV() {
+    const headers = ['User ID', 'Name', 'Company', 'Shift Type', 'Shift Start', 'Shift End', 'Daily Hours', 'Monthly Salary', 'Created Date'];
+    const rows = filteredUsers.map(user => {
+        const row = document.querySelector(`tr[data-userid="${user.userid}"]`);
+        const cells = row.querySelectorAll('td');
+        return [
+            cells[0].textContent.trim(),
+            cells[1].textContent.trim(),
+            cells[2].textContent.trim(),
+            cells[3].textContent.trim(),
+            cells[4].textContent.trim().split(' - ')[0],
+            cells[4].textContent.trim().split(' - ')[1],
+            cells[5].textContent.trim(),
+            cells[6].textContent.trim(),
+            cells[7].textContent.trim()
+        ];
+    });
+    
+    return [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+}
+
+
+
+function syncUsersFromDevice() {
+    if (confirm('This will sync user names from the biometric device. Your custom shift times, hourly rates, and other settings will be preserved. Continue?')) {
+        // Show loading state
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
+        button.disabled = true;
+        
+        // Call the API to sync only users
+        fetch('/api/sync_users_only', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'device_ip=192.168.1.201&device_port=4370'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+                // Reload the page to show updated data
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Error syncing users: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            // Restore button state
+            button.innerHTML = originalText;
+            button.disabled = false;
+        });
+    }
+}
+
+function pushUserToDevice(userId) {
+    if (confirm('This will push the updated user information to the biometric device. Continue?')) {
+        showAlert('Pushing user to device...', 'info');
+        
+        // Call the API to push user to device
+        fetch('/api/push_user_to_device', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                device_ip: '192.168.1.201',
+                device_port: 4370
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showAlert(data.message, 'success');
+            } else {
+                showAlert(data.message, 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Error pushing user to device: ' + error.message, 'danger');
+        });
+    }
+}
+
+function showEditUserModal(userId) {
+    // Fetch user data and populate modal
+    fetch(`/api/users/${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const user = data.user;
+                document.getElementById('editUserId').value = user.userid;
+                document.getElementById('editUserName').value = user.name;
+                document.getElementById('editUserCompany').value = user.company_name;
+                document.getElementById('editUserShiftStart').value = user.shift_start_time;
+                document.getElementById('editUserShiftEnd').value = user.shift_end_time;
+                document.getElementById('editUserShiftType').value = user.shift_type;
+                document.getElementById('editUserWorkingHours').value = user.working_hours_per_day;
+                document.getElementById('editUserMonthlySalary').value = user.monthly_salary;
+                
+                new bootstrap.Modal(document.getElementById('editUserModal')).show();
+            } else {
+                showAlert('Error loading user data', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('Error loading user data', 'danger');
+        });
+    }
 </script>
+
+<style>
+.alert {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+    border-radius: 8px;
+}
+
+.alert-success {
+    background-color: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+}
+
+.alert-info {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border-left: 4px solid #17a2b8;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #ffc107;
+}
+</style>
 {% endblock %}
