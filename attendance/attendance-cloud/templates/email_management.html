@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% block title %}Email Management - {{ COMPANY_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-envelope me-2"></i>Email Management</h2>
+        <p class="text-muted">Configure and manage automated email reports</p>
+    </div>
+</div>
+
+<!-- Email Configuration -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Email Configuration</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">SMTP Server</label>
+                    <input type="text" class="form-control" id="smtpServer" value="smtp.gmail.com" readonly>
+                    <small class="text-muted">Currently configured for Gmail</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Port</label>
+                    <input type="text" class="form-control" id="smtpPort" value="587" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Security</label>
+                    <input type="text" class="form-control" id="smtpSecurity" value="TLS" readonly>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">Email Address</label>
+                    <input type="email" class="form-control" id="emailAddress" placeholder="your-email@gmail.com">
+                    <small class="text-muted">Your Gmail address</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">App Password</label>
+                    <input type="password" class="form-control" id="appPassword" placeholder="Your Gmail app password">
+                    <small class="text-muted">
+                        <a href="https://support.google.com/accounts/answer/185833" target="_blank">
+                            How to get app password?
+                        </a>
+                    </small>
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="updateEmailConfig()">
+                        <i class="fas fa-save me-2"></i>Update Configuration
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Email -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-paper-plane me-2"></i>Test Email Configuration</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="mb-3">
+                    <label class="form-label">Test Email Address</label>
+                    <input type="email" class="form-control" id="testEmail" placeholder="recipient@example.com">
+                    <small class="text-muted">Send a test email to verify your configuration</small>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="mb-3">
+                    <label class="form-label">&nbsp;</label>
+                    <div class="d-grid">
+                        <button class="btn btn-success" onclick="sendTestEmail()">
+                            <i class="fas fa-paper-plane me-2"></i>Send Test Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manual Report Sending -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-calendar-day me-2"></i>Daily Attendance Report</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Recipients (comma-separated)</label>
+                    <input type="text" class="form-control" id="dailyRecipients" placeholder="manager@company.com, hr@company.com">
+                    <small class="text-muted">Who should receive daily reports?</small>
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="sendDailyReport()">
+                        <i class="fas fa-send me-2"></i>Send Daily Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-calendar-alt me-2"></i>Monthly Salary Report</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Month</label>
+                        <select class="form-select" id="monthSelect">
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Year</label>
+                        <select class="form-select" id="yearSelect">
+                            {% for year in range(2024, 2027) %}
+                            <option value="{{ year }}" {% if year == 2024 %}selected{% endif %}>{{ year }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Recipients (comma-separated)</label>
+                    <input type="text" class="form-control" id="monthlyRecipients" placeholder="hr@company.com, payroll@company.com">
+                    <small class="text-muted">Who should receive monthly reports?</small>
+                </div>
+                <div class="mb-3">
+                    <button class="btn btn-primary" onclick="sendMonthlyReport()">
+                        <i class="fas fa-send me-2"></i>Send Monthly Report
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Automated Schedule -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Automated Schedule</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6>Daily Attendance Report</h6>
+                <p class="text-muted">Automatically sent every day at 6:00 PM</p>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="dailyAuto" checked disabled>
+                    <label class="form-check-label" for="dailyAuto">Enabled</label>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <h6>Monthly Salary Report</h6>
+                <p class="text-muted">Automatically sent on 1st of each month at 9:00 AM</p>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="monthlyAuto" checked disabled>
+                    <label class="form-check-label" for="monthlyAuto">Enabled</label>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Automated emails are configured in the system. You can modify the schedule in the backend configuration.
+            </small>
+        </div>
+    </div>
+</div>
+
+<!-- Email History -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Email Activity</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Recipients</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="emailHistory">
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">
+                            No email history available yet
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateEmailConfig() {
+    const email = document.getElementById('emailAddress').value;
+    const password = document.getElementById('appPassword').value;
+    
+    if (!email || !password) {
+        showAlert('Please fill in both email and app password', 'warning');
+        return;
+    }
+    
+    showAlert('Saving email configuration...', 'info');
+    
+    fetch('/api/save_email_config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            email: email,
+            password: password
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Email configuration saved successfully!', 'success');
+        } else {
+            showAlert('Failed to save configuration: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error saving configuration: ' + error.message, 'danger');
+        console.error('Error:', error);
+    });
+}
+
+function sendTestEmail() {
+    const email = document.getElementById('testEmail').value;
+    const emailAddress = document.getElementById('emailAddress').value;
+    const appPassword = document.getElementById('appPassword').value;
+    
+    if (!email) {
+        showAlert('Please enter a test email address', 'warning');
+        return;
+    }
+    
+    if (!emailAddress || !appPassword) {
+        showAlert('Please configure your email settings first', 'warning');
+        return;
+    }
+    
+    showAlert('Sending test email...', 'info');
+    
+    fetch('/api/send_test_email', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            email: email,
+            email_config: {
+                email: emailAddress,
+                password: appPassword
+            }
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Test email sent successfully!', 'success');
+        } else {
+            showAlert('Failed to send test email: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error sending test email: ' + error.message, 'danger');
+        console.error('Error:', error);
+    });
+}
+
+function sendDailyReport() {
+    const recipients = document.getElementById('dailyRecipients').value;
+    
+    if (!recipients) {
+        showAlert('Please enter recipient email addresses', 'warning');
+        return;
+    }
+    
+    const recipientList = recipients.split(',').map(email => email.trim()).filter(email => email);
+    
+    showAlert('Sending daily report...', 'info');
+    
+    fetch('/api/send_daily_report', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ recipients: recipientList })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Daily report sent successfully!', 'success');
+        } else {
+            showAlert('Failed to send daily report: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error sending daily report: ' + error.message, 'danger');
+        console.error('Error:', error);
+    });
+}
+
+function sendMonthlyReport() {
+    const month = document.getElementById('monthSelect').value;
+    const year = document.getElementById('yearSelect').value;
+    const recipients = document.getElementById('monthlyRecipients').value;
+    
+    if (!recipients) {
+        showAlert('Please enter recipient email addresses', 'warning');
+        return;
+    }
+    
+    const recipientList = recipients.split(',').map(email => email.trim()).filter(email => email);
+    
+    showAlert('Sending monthly report...', 'info');
+    
+    fetch('/api/send_monthly_report', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            month: parseInt(month), 
+            year: parseInt(year), 
+            recipients: recipientList 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('Monthly report sent successfully!', 'success');
+        } else {
+            showAlert('Failed to send monthly report: ' + data.message, 'danger');
+        }
+    })
+    .catch(error => {
+        showAlert('Error sending monthly report: ' + error.message, 'danger');
+        console.error('Error:', error);
+    });
+}
+
+// Set current month and year and load email config
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    
+    document.getElementById('monthSelect').value = currentMonth;
+    document.getElementById('yearSelect').value = currentYear;
+    
+    // Load saved email configuration
+    loadEmailConfig();
+});
+
+function loadEmailConfig() {
+    fetch('/api/get_email_config')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.config) {
+            document.getElementById('emailAddress').value = data.config.email;
+            document.getElementById('appPassword').value = data.config.password;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading email config:', error);
+    });
+}
+</script>
+{% endblock %}

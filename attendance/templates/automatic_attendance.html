@@ -1,0 +1,656 @@
+{% extends "base.html" %}
+
+{% block title %}Automatic Attendance - {{ COMPANY_NAME }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="fas fa-robot me-2"></i>Automatic Attendance System</h2>
+            <p class="text-muted">Automatically pull attendance from biometric machine and mark monthly attendance</p>
+        </div>
+    </div>
+
+    <!-- Device Connection Status -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-server me-2"></i>Device Connection</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="d-flex align-items-center mb-3">
+                                <div class="me-3">
+                                    <span class="badge bg-success" id="deviceStatus">Connected</span>
+                                </div>
+                                <div>
+                                    <strong>Device Status:</strong> 
+                                    <span id="deviceInfo">ESSL Identix K90 - Ready</span>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <span class="badge bg-info" id="lastSync">Last Sync: Never</span>
+                                </div>
+                                <div>
+                                    <strong>Last Sync:</strong> 
+                                    <span id="lastSyncTime">No data pulled yet</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <button class="btn btn-success me-2" onclick="testDeviceConnection()">
+                                <i class="fas fa-plug me-1"></i>Test Connection
+                            </button>
+                            <button class="btn btn-primary" onclick="pullFromDevice()">
+                                <i class="fas fa-download me-1"></i>Pull from Device
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Month Selection and Auto-Mark -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <label for="monthSelect" class="form-label">Select Month</label>
+            <input type="month" class="form-control" id="monthSelect" onchange="loadMonthData()">
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-warning" onclick="autoMarkMonth()">
+                    <i class="fas fa-magic me-1"></i>Auto-Mark Month
+                </button>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-success" onclick="saveAllAttendance()">
+                    <i class="fas fa-save me-1"></i>Save All
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Attendance Summary -->
+    <div class="card">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-calendar-check me-2"></i>Monthly Attendance Summary</h5>
+            <div>
+                <span class="badge bg-light text-dark me-2" id="totalDays">Days: 0</span>
+                <span class="badge bg-light text-dark me-2" id="workingDays">Working: 0</span>
+                <span class="badge bg-light text-dark me-2" id="weekends">Weekends: 0</span>
+                <span class="badge bg-light text-dark" id="holidays">Holidays: 0</span>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="monthlyTable">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-center" style="min-width: 150px;">Employee</th>
+                            <th class="text-center">Present Days</th>
+                            <th class="text-center">Absent Days</th>
+                            <th class="text-center">Leave Days</th>
+                            <th class="text-center">Working Hours</th>
+                            <th class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthlyTableBody">
+                        <!-- Data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-Mark Rules -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="fas fa-cogs me-2"></i>Auto-Mark Rules</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="autoWeekends" checked>
+                                <label class="form-check-label" for="autoWeekends">
+                                    <strong>Auto-mark Weekends</strong><br>
+                                    <small class="text-muted">Saturdays and Sundays marked as weekend</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="autoHolidays" checked>
+                                <label class="form-check-label" for="autoHolidays">
+                                    <strong>Auto-mark Holidays</strong><br>
+                                    <small class="text-muted">Public holidays marked automatically</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="autoPresent" checked>
+                                <label class="form-check-label" for="autoPresent">
+                                    <strong>Auto-mark Present</strong><br>
+                                    <small class="text-muted">Working days with punch data marked present</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="autoAbsent">
+                                <label class="form-check-label" for="autoAbsent">
+                                    <strong>Auto-mark Absent</strong><br>
+                                    <small class="text-muted">Working days without punch data marked absent</small>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Legend -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Status Legend</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <span class="badge bg-success">Present</span>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-danger">Absent</span>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-info">Leave</span>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-secondary">Holiday</span>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-dark">Weekend</span>
+                        </div>
+                        <div class="col-md-2">
+                            <span class="badge bg-warning">Pending</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let currentEmployees = [];
+let currentMonth = '';
+let currentYear = '';
+let monthDays = [];
+let holidays = [];
+let attendanceData = [];
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Set current month
+    const now = new Date();
+    const currentMonthStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    document.getElementById('monthSelect').value = currentMonthStr;
+    
+    // Load month data
+    loadMonthData();
+    
+    // Check device connection
+    checkDeviceConnection();
+});
+
+// Check device connection
+function checkDeviceConnection() {
+    fetch('/api/test_device_connection')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('deviceStatus').textContent = 'Connected';
+            document.getElementById('deviceStatus').className = 'badge bg-success';
+            document.getElementById('deviceInfo').textContent = data.device_info || 'ESSL Identix K90 - Ready';
+        } else {
+            document.getElementById('deviceStatus').textContent = 'Disconnected';
+            document.getElementById('deviceStatus').className = 'badge bg-danger';
+            document.getElementById('deviceInfo').textContent = 'Device not accessible';
+        }
+    })
+    .catch(error => {
+        document.getElementById('deviceStatus').textContent = 'Error';
+        document.getElementById('deviceStatus').className = 'badge bg-warning';
+        document.getElementById('deviceInfo').textContent = 'Connection error';
+    });
+}
+
+// Test device connection
+function testDeviceConnection() {
+    showAlert('info', 'Testing device connection...');
+    
+    fetch('/api/test_device_connection')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Device connected successfully!');
+            checkDeviceConnection();
+        } else {
+            showAlert('danger', 'Device connection failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error testing device connection');
+    });
+}
+
+// Pull data from device
+function pullFromDevice() {
+    showAlert('info', 'Pulling data from biometric device...');
+    
+    fetch('/api/pull_data_from_device', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `Successfully pulled data: ${data.users_count} users, ${data.attendance_count} attendance records`);
+            document.getElementById('lastSync').textContent = 'Last Sync: Just now';
+            document.getElementById('lastSyncTime').textContent = new Date().toLocaleString();
+            
+            // Reload month data to show updated attendance
+            loadMonthData();
+        } else {
+            showAlert('danger', 'Failed to pull data: ' + data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error pulling data from device');
+    });
+}
+
+// Load month data
+function loadMonthData() {
+    const monthValue = document.getElementById('monthSelect').value;
+    if (!monthValue) {
+        showAlert('warning', 'Please select a month first');
+        return;
+    }
+    
+    const [year, month] = monthValue.split('-');
+    currentYear = parseInt(year);
+    currentMonth = parseInt(month);
+    
+    showAlert('info', `Loading data for ${getMonthName(currentMonth)} ${currentYear}...`);
+    
+    // Generate month days
+    generateMonthDays();
+    
+    // Load employees
+    loadEmployees();
+    
+    // Load holidays
+    loadHolidays();
+}
+
+// Generate month days
+function generateMonthDays() {
+    monthDays = [];
+    const firstDay = new Date(currentYear, currentMonth - 1, 1);
+    const lastDay = new Date(currentYear, currentMonth, 0);
+    const totalDays = lastDay.getDate();
+    
+    for (let day = 1; day <= totalDays; day++) {
+        const date = new Date(currentYear, currentMonth - 1, day);
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+        
+        monthDays.push({
+            day: day,
+            date: date.toISOString().split('T')[0],
+            isWeekend: isWeekend,
+            dayName: date.toLocaleDateString('en-US', { weekday: 'short' })
+        });
+    }
+    
+    updateDayCounters();
+}
+
+// Update day counters
+function updateDayCounters() {
+    const total = monthDays.length;
+    const working = monthDays.filter(d => !d.isWeekend).length;
+    const weekends = monthDays.filter(d => d.isWeekend).length;
+    
+    document.getElementById('totalDays').textContent = `Days: ${total}`;
+    document.getElementById('workingDays').textContent = `Working: ${working}`;
+    document.getElementById('workingDays').textContent = `Weekends: ${weekends}`;
+}
+
+// Load employees
+function loadEmployees() {
+    fetch('/api/users')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            currentEmployees = data.users;
+            generateMonthlySummary();
+            showAlert('success', `Loaded ${currentEmployees.length} employees for ${getMonthName(currentMonth)} ${currentYear}`);
+        } else {
+            showAlert('danger', 'Failed to load employees: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading employees:', error);
+        showAlert('danger', 'Error loading employees');
+    });
+}
+
+// Load holidays
+function loadHolidays() {
+    fetch('/api/holidays')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            holidays = data.holidays.filter(h => {
+                const holidayDate = new Date(h.date);
+                return holidayDate.getFullYear() === currentYear && 
+                       holidayDate.getMonth() === currentMonth - 1;
+            });
+            
+            const holidayCount = holidays.length;
+            document.getElementById('holidays').textContent = `Holidays: ${holidayCount}`;
+            
+            console.log('Loaded holidays:', holidays);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading holidays:', error);
+    });
+}
+
+// Generate monthly summary table
+function generateMonthlySummary() {
+    const tbody = document.getElementById('monthlyTableBody');
+    tbody.innerHTML = '';
+    
+    currentEmployees.forEach(employee => {
+        const row = createEmployeeSummaryRow(employee);
+        tbody.appendChild(row);
+    });
+    
+    // Load existing attendance data
+    loadExistingMonthlyAttendance();
+}
+
+// Create employee summary row
+function createEmployeeSummaryRow(employee) {
+    const row = document.createElement('tr');
+    row.setAttribute('data-userid', employee.userid);
+    
+    row.innerHTML = `
+        <td>
+            <div class="d-flex flex-column">
+                <strong>${employee.userid}</strong>
+                <small class="text-muted">${employee.name}</small>
+            </div>
+        </td>
+        <td class="text-center">
+            <span class="badge bg-success" id="present-${employee.userid}">0</span>
+        </td>
+        <td class="text-center">
+            <span class="badge bg-danger" id="absent-${employee.userid}">0</span>
+        </td>
+        <td class="text-center">
+            <span class="badge bg-info" id="leave-${employee.userid}">0</span>
+        </td>
+        <td class="text-center">
+            <span class="badge bg-primary" id="hours-${employee.userid}">0</span>
+        </td>
+        <td class="text-center">
+            <span class="badge bg-warning" id="status-${employee.userid}">Pending</span>
+        </td>
+    `;
+    
+    return row;
+}
+
+// Load existing monthly attendance
+function loadExistingMonthlyAttendance() {
+    monthDays.forEach(day => {
+        currentEmployees.forEach(employee => {
+            loadExistingAttendance(employee.userid, day.date);
+        });
+    });
+}
+
+// Load existing attendance for specific user and date
+function loadExistingAttendance(userid, date) {
+    fetch(`/api/get_attendance?userid=${userid}&date=${date}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.attendance) {
+            updateAttendanceSummary(userid, data.attendance.status);
+        }
+    })
+    .catch(error => {
+        console.log('No existing attendance found for user', userid, 'on', date);
+    });
+}
+
+// Update attendance summary
+function updateAttendanceSummary(userid, status) {
+    const presentSpan = document.getElementById(`present-${userid}`);
+    const absentSpan = document.getElementById(`absent-${userid}`);
+    const leaveSpan = document.getElementById(`leave-${userid}`);
+    const hoursSpan = document.getElementById(`hours-${userid}`);
+    const statusSpan = document.getElementById(`status-${userid}`);
+    
+    if (status === 'present') {
+        presentSpan.textContent = parseInt(presentSpan.textContent) + 1;
+        hoursSpan.textContent = parseInt(hoursSpan.textContent) + 8;
+    } else if (status === 'absent') {
+        absentSpan.textContent = parseInt(absentSpan.textContent) + 1;
+    } else if (status === 'leave') {
+        leaveSpan.textContent = parseInt(leaveSpan.textContent) + 1;
+    }
+    
+    // Update overall status
+    const present = parseInt(presentSpan.textContent);
+    const absent = parseInt(absentSpan.textContent);
+    const leave = parseInt(leaveSpan.textContent);
+    
+    if (present > 0) {
+        statusSpan.textContent = 'Marked';
+        statusSpan.className = 'badge bg-success';
+    } else if (absent > 0 || leave > 0) {
+        statusSpan.textContent = 'Marked';
+        statusSpan.className = 'badge bg-success';
+    } else {
+        statusSpan.textContent = 'Pending';
+        statusSpan.className = 'badge bg-warning';
+    }
+}
+
+// Auto-mark month
+function autoMarkMonth() {
+    showAlert('info', 'Auto-marking attendance for the month...');
+    
+    const autoWeekends = document.getElementById('autoWeekends').checked;
+    const autoHolidays = document.getElementById('autoHolidays').checked;
+    const autoPresent = document.getElementById('autoPresent').checked;
+    const autoAbsent = document.getElementById('autoAbsent').checked;
+    
+    attendanceData = [];
+    
+    monthDays.forEach(day => {
+        currentEmployees.forEach(employee => {
+            let status = '';
+            let workingHours = 0;
+            
+            // Check if it's a weekend
+            if (day.isWeekend && autoWeekends) {
+                status = 'weekend';
+                workingHours = 0;
+            }
+            // Check if it's a holiday
+            else if (holidays.some(h => h.date === day.date) && autoHolidays) {
+                status = 'holiday';
+                workingHours = 0;
+            }
+            // Check if employee has punch data for this date
+            else if (autoPresent || autoAbsent) {
+                // This would check actual punch data from the device
+                // For now, we'll mark as present for working days
+                status = 'present';
+                workingHours = 8;
+            }
+            
+            if (status) {
+                attendanceData.push({
+                    userid: parseInt(employee.userid),
+                    date: day.date,
+                    status: status,
+                    working_hours: workingHours,
+                    overtime_hours: 0,
+                    late_minutes: 0,
+                    remarks: 'Auto-marked'
+                });
+            }
+        });
+    });
+    
+    if (attendanceData.length === 0) {
+        showAlert('info', 'No attendance data to auto-mark');
+        return;
+    }
+    
+    showAlert('success', `Auto-marked ${attendanceData.length} attendance records. Click 'Save All' to save to database.`);
+    
+    // Update summary display
+    updateSummaryDisplay();
+}
+
+// Update summary display
+function updateSummaryDisplay() {
+    // Reset all counters
+    currentEmployees.forEach(employee => {
+        document.getElementById(`present-${employee.userid}`).textContent = '0';
+        document.getElementById(`absent-${employee.userid}`).textContent = '0';
+        document.getElementById(`leave-${employee.userid}`).textContent = '0';
+        document.getElementById(`hours-${employee.userid}`).textContent = '0';
+        document.getElementById(`status-${employee.userid}`).textContent = 'Pending';
+        document.getElementById(`status-${employee.userid}`).className = 'badge bg-warning';
+    });
+    
+    // Update with new data
+    attendanceData.forEach(record => {
+        updateAttendanceSummary(record.userid, record.status);
+    });
+}
+
+// Save all attendance
+function saveAllAttendance() {
+    if (attendanceData.length === 0) {
+        showAlert('info', 'No attendance data to save. Please auto-mark the month first.');
+        return;
+    }
+    
+    showAlert('info', `Saving ${attendanceData.length} attendance records...`);
+    
+    fetch('/api/save_monthly_attendance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            attendance_data: attendanceData
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `Successfully saved ${data.saved_count} attendance records!`);
+            
+            // Update status to show saved
+            currentEmployees.forEach(employee => {
+                const statusSpan = document.getElementById(`status-${employee.userid}`);
+                statusSpan.textContent = 'Saved';
+                statusSpan.className = 'badge bg-success';
+            });
+        } else {
+            showAlert('danger', `Save failed: ${data.message}`);
+            if (data.errors && data.errors.length > 0) {
+                console.error('Save errors:', data.errors);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error saving attendance:', error);
+        showAlert('danger', 'Error saving attendance');
+    });
+}
+
+// Utility functions
+function getMonthName(month) {
+    const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return months[month - 1];
+}
+
+// Show alert
+function showAlert(type, message) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('.container-fluid');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+
+<style>
+.badge {
+    font-size: 0.8rem;
+}
+
+.table-sm td, .table-sm th {
+    padding: 0.5rem;
+}
+
+.table-responsive {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.card-header {
+    font-weight: 600;
+}
+</style>
+{% endblock %}

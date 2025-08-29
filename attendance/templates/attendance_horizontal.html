@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block title %}Horizontal Attendance View{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-calendar-check me-2"></i>Horizontal Attendance View</h2>
+        <p class="text-muted">View attendance records with employees as rows and dates as columns</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filter Records</h5>
+    </div>
+    <div class="card-body">
+        <form method="GET" action="/attendance_horizontal" class="row g-3">
+            <div class="col-md-3">
+                <label for="from_date" class="form-label">From Date</label>
+                <input type="date" class="form-control" id="from_date" name="from_date" 
+                       value="{{ from_date if from_date else (now - timedelta(days=7)).strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-md-3">
+                <label for="to_date" class="form-label">To Date</label>
+                <input type="date" class="form-control" id="to_date" name="to_date" 
+                       value="{{ to_date if to_date else now.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-md-3">
+                <label for="company_id" class="form-label">Filter by Company</label>
+                <select class="form-select" id="company_id" name="company_id">
+                    <option value="">All Companies</option>
+                    {% for company in companies %}
+                    <option value="{{ company.id }}" {% if company.id|string == selected_company %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>Filter
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="d-grid">
+                            <a href="/attendance" class="btn btn-secondary">
+                                <i class="fas fa-list me-2"></i>Switch to Vertical View
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <a href="/export_excel_horizontal?from_date={{ from_date }}&to_date={{ to_date }}{% if selected_company %}&company_id={{ selected_company }}{% endif %}" class="btn btn-success">
+                                <i class="fas fa-file-excel me-2"></i>Export Excel
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <a href="/export_pdf_horizontal?from_date={{ from_date }}&to_date={{ to_date }}{% if selected_company %}&company_id={{ selected_company }}{% endif %}" class="btn btn-info">
+                                <i class="fas fa-file-pdf me-2"></i>Export PDF
+                            </a>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-warning" onclick="copyTableToClipboard()">
+                                <i class="fas fa-copy me-2"></i>Copy All Cells
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Horizontal Attendance Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-table me-2"></i>Horizontal Attendance View
+            <span class="badge bg-primary ms-2">{{ employees|length }} employees</span>
+            <span class="badge bg-info ms-2">{{ date_list|length }} days</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        {% if employees %}
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="horizontalAttendanceTable">
+                <thead class="table-dark">
+                    <tr>
+                        <!-- Employee Info Columns (Yellow) -->
+                        <th class="bg-warning text-dark" style="min-width: 150px;">Employee Name</th>
+                        <th class="bg-warning text-dark" style="min-width: 80px;">Emp ID</th>
+                        <th class="bg-warning text-dark" style="min-width: 120px;">Company</th>
+                        <th class="bg-warning text-dark" style="min-width: 100px;">Shift Type</th>
+                        
+                        <!-- Date Columns (Orange) -->
+                        {% for date in date_list %}
+                        <th class="bg-warning text-dark" style="min-width: 120px; text-align: center;">
+                            {{ date.split('-')[2] }}/{{ date.split('-')[1] }}/{{ date.split('-')[0] }}
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in employees %}
+                    <tr>
+                        <!-- Employee Info -->
+                        <td class="fw-bold">{{ employee.name }}</td>
+                        <td>{{ employee.userid }}</td>
+                        <td>{{ employee.company_name or 'N/A' }}</td>
+                        <td>
+                            <span class="badge bg-{{ 'warning' if employee.shift_type == 'night' else 'success' }}">
+                                {{ employee.shift_type|title if employee.shift_type else 'Day' }}
+                            </span>
+                        </td>
+                        
+                        <!-- Date Columns -->
+                        {% for date in date_list %}
+                        {% set attendance = attendance_data[employee.userid][date] %}
+                        <td class="text-center" style="min-width: 120px;">
+                            {% if attendance %}
+                                <div class="small">
+                                    <div class="fw-bold text-success">{{ attendance.check_in }}</div>
+                                    {% if attendance.check_out != '-' %}
+                                        <div class="text-danger">{{ attendance.check_out }}</div>
+                                        <div class="text-primary fw-bold">{{ "%.2f"|format(attendance.working_hours) }}h</div>
+                                    {% else %}
+                                        <div class="text-muted">Single Punch</div>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-users fa-3x text-muted mb-3"></i>
+            <h5 class="text-muted">No employees found</h5>
+            <p class="text-muted">Try adjusting your filters or add some employees.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Legend</h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-success text-white px-2 py-1 rounded me-2" style="width: 20px; height: 20px;"></div>
+                    <span class="small">Check-in Time</span>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-danger text-white px-2 py-1 rounded me-2" style="width: 20px; height: 20px;"></div>
+                    <span class="small">Check-out Time</span>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-primary text-white px-2 py-1 rounded me-2" style="width: 20px; height: 20px;"></div>
+                    <span class="small">Working Hours</span>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-warning text-dark px-2 py-1 rounded me-2" style="width: 20px; height: 20px;"></div>
+                    <span class="small">Employee Info</span>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <div class="bg-warning text-dark px-2 py-1 rounded me-2" style="width: 20px; height: 20px;"></div>
+                    <span class="small">Date Columns</span>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="text-muted">-</span>
+                    <span class="small ms-2">No Attendance Record</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Copy table data to clipboard function
+function copyTableToClipboard() {
+    const table = document.getElementById('horizontalAttendanceTable');
+    let csvContent = '';
+    
+    // Get headers
+    const headers = [];
+    const headerRow = table.querySelector('thead tr');
+    headerRow.querySelectorAll('th').forEach(th => {
+        headers.push(th.textContent.trim());
+    });
+    csvContent += headers.join('\t') + '\n';
+    
+    // Get data rows
+    const rows = table.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        const rowData = [];
+        row.querySelectorAll('td').forEach(td => {
+            // Extract text content, handling nested elements
+            let cellText = '';
+            if (td.querySelector('.small')) {
+                // For attendance cells with multiple lines
+                const checkIn = td.querySelector('.text-success') ? td.querySelector('.text-success').textContent.trim() : '';
+                const checkOut = td.querySelector('.text-danger') ? td.querySelector('.text-danger').textContent.trim() : '';
+                const workingHours = td.querySelector('.text-primary') ? td.querySelector('.text-primary').textContent.trim() : '';
+                const singlePunch = td.querySelector('.text-muted') ? td.querySelector('.text-muted').textContent.trim() : '';
+                
+                if (checkIn && checkOut && workingHours) {
+                    cellText = `${checkIn} | ${checkOut} | ${workingHours}`;
+                } else if (checkIn && singlePunch) {
+                    cellText = `${checkIn} | Single Punch`;
+                } else {
+                    cellText = checkIn || singlePunch || '-';
+                }
+            } else {
+                // For simple cells (employee info)
+                cellText = td.textContent.trim();
+            }
+            rowData.push(cellText);
+        });
+        csvContent += rowData.join('\t') + '\n';
+    });
+    
+    // Copy to clipboard using fallback method
+    try {
+        // Try modern clipboard API first
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(csvContent).then(function() {
+                showSuccessMessage();
+            }).catch(function(err) {
+                console.error('Clipboard API failed, using fallback method');
+                useFallbackCopyMethod();
+            });
+        } else {
+            // Use fallback method for older browsers or non-secure contexts
+            useFallbackCopyMethod();
+        }
+    } catch (err) {
+        console.error('Error with clipboard:', err);
+        useFallbackCopyMethod();
+    }
+    
+    function useFallbackCopyMethod() {
+        // Create a temporary textarea element
+        const textArea = document.createElement('textarea');
+        textArea.value = csvContent;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        try {
+            const successful = document.execCommand('copy');
+            if (successful) {
+                showSuccessMessage();
+            } else {
+                // If execCommand fails, show the data in a modal for manual copy
+                showDataModal();
+            }
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            // Show the data in a modal for manual copy
+            showDataModal();
+        }
+        
+        document.body.removeChild(textArea);
+    }
+    
+    function showSuccessMessage() {
+        // Show success message
+        const button = event.target;
+        const originalText = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check me-2"></i>Copied!';
+        button.classList.remove('btn-warning');
+        button.classList.add('btn-success');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('btn-success');
+            button.classList.add('btn-warning');
+        }, 2000);
+        
+        // Show success alert
+        alert('Table data copied to clipboard! You can now paste it into Excel.\n\nNote: The data is tab-separated, so when you paste into Excel, it will automatically separate into columns.');
+    }
+    
+    function showDataModal() {
+        // Create a modal to show the data for manual copy
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = `
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 80%;
+            overflow: auto;
+        `;
+        
+        modalContent.innerHTML = `
+            <h4>Copy Table Data Manually</h4>
+            <p>Select the text below and copy it (Ctrl+C), then paste into Excel:</p>
+            <textarea style="width: 100%; height: 300px; font-family: monospace; border: 1px solid #ccc; padding: 10px;" readonly>${csvContent}</textarea>
+            <div style="margin-top: 15px; text-align: center;">
+                <button onclick="this.closest('.modal-overlay').remove()" style="padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Close</button>
+            </div>
+        `;
+        
+        modal.className = 'modal-overlay';
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        // Auto-select the textarea content
+        const textarea = modalContent.querySelector('textarea');
+        textarea.focus();
+        textarea.select();
+        
+        // Show alert with instructions
+        alert('Data copied to clipboard! If that didn\'t work, a modal will open with the data for manual copy.\n\nSelect all the text in the modal and copy it (Ctrl+C), then paste into Excel.');
+    }
+}
+
+// Add sticky header functionality
+window.addEventListener('scroll', function() {
+    const table = document.getElementById('horizontalAttendanceTable');
+    const header = table.querySelector('thead');
+    
+    if (window.scrollY > 200) {
+        header.style.position = 'sticky';
+        header.style.top = '0';
+        header.style.zIndex = '1000';
+    } else {
+        header.style.position = 'static';
+    }
+});
+</script>
+
+<style>
+.table-responsive {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.bg-warning {
+    background-color: #ffc107 !important;
+}
+
+.table-bordered th,
+.table-bordered td {
+    border: 1px solid #dee2e6;
+}
+
+.small {
+    font-size: 0.875em;
+}
+
+.fw-bold {
+    font-weight: bold !important;
+}
+</style>
+{% endblock %}

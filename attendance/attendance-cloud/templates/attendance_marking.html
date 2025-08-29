@@ -1,0 +1,1327 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Marking - {{ COMPANY_NAME }}{% endblock %}
+
+{% block content %}
+<style>
+.monthly-sheet-table {
+    font-size: 0.85rem;
+}
+
+.monthly-sheet-table th {
+    padding: 8px 4px !important;
+    font-size: 0.8rem;
+    text-align: center;
+    vertical-align: middle;
+    background-color: #343a40;
+    color: white;
+    border: 1px solid #495057;
+}
+
+.monthly-sheet-table td {
+    padding: 4px 2px !important;
+    text-align: center;
+    vertical-align: middle;
+    border: 1px solid #dee2e6;
+}
+
+.monthly-sheet-table .employee-info {
+    text-align: left;
+    padding: 6px 8px !important;
+}
+
+.monthly-sheet-table .status-cell {
+    min-width: 50px;
+    max-width: 60px;
+}
+
+.monthly-sheet-table .form-select-sm {
+    border: none;
+    background: transparent;
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    min-width: 50px;
+    text-align: center;
+}
+
+.monthly-sheet-table .form-select-sm:focus {
+    box-shadow: none;
+    border: 1px solid #007bff;
+    background: white;
+}
+
+.monthly-sheet-table .form-select-sm:hover {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.monthly-sheet-table .status-cell {
+    transition: background-color 0.2s ease;
+    position: relative;
+}
+
+.monthly-sheet-table .status-cell:hover {
+    background-color: #f8f9fa;
+}
+
+.monthly-sheet-table .status-cell .form-select-sm {
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Status-specific colors */
+.monthly-sheet-table .status-present {
+    background-color: #d4edda !important;
+    color: #155724;
+}
+
+.monthly-sheet-table .status-absent {
+    background-color: #f8d7da !important;
+    color: #721c24;
+}
+
+.monthly-sheet-table .status-half-day {
+    background-color: #fff3cd !important;
+    color: #856404;
+}
+
+.monthly-sheet-table .status-leave {
+    background-color: #e2e3e5 !important;
+    color: #383d41;
+}
+
+.monthly-sheet-table .status-late {
+    background-color: #fce4ec !important;
+    color: #880e4f;
+}
+
+.monthly-sheet-table .status-holiday {
+    background-color: #d1ecf1 !important;
+    color: #0c5460;
+}
+
+.monthly-sheet-table .status-na {
+    background-color: #6c757d !important;
+    color: #ffffff;
+}
+
+.monthly-sheet-table .holiday-input {
+    background-color: #d1ecf1 !important;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+    border-radius: 4px;
+}
+
+.monthly-sheet-table .holiday-input:focus {
+    background-color: #ffffff !important;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.monthly-sheet-table .filter-row {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.monthly-sheet-table .filter-row .form-label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.monthly-sheet-table .filter-row .form-control,
+.monthly-sheet-table .filter-row .form-select {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+}
+
+.monthly-sheet-table .filter-row .form-control:focus,
+.monthly-sheet-table .filter-row .form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.monthly-sheet-table .weekend-cell {
+    background-color: #fff3cd;
+}
+
+.monthly-sheet-table .holiday-cell {
+    background-color: #d1ecf1;
+}
+
+.monthly-sheet-table .present-cell {
+    background-color: #d4edda;
+}
+
+.monthly-sheet-table .absent-cell {
+    background-color: #f8d7da;
+}
+
+.monthly-sheet-table .leave-cell {
+    background-color: #e2e3e5;
+}
+</style>
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-check-circle me-2"></i>Attendance Marking
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportAttendance()">
+                <i class="fas fa-download me-1"></i>Export
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Date and Company Info -->
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1">Selected Date: {{ selected_date }}</h6>
+                <p class="card-text small text-muted mb-0">
+                    {% if is_weekend %}
+                        <span class="badge bg-warning">Weekend</span>
+                    {% elif holiday %}
+                        <span class="badge bg-info">{{ holiday.name }}</span>
+                    {% else %}
+                        <span class="badge bg-success">Working Day</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body py-2">
+                <h6 class="card-title mb-1">Total Employees: {{ users|length }}</h6>
+                <p class="card-text small text-muted mb-0">
+                    <span class="badge bg-success" id="presentCount">0</span> Present |
+                    <span class="badge bg-warning" id="absentCount">0</span> Absent |
+                    <span class="badge bg-info" id="leaveCount">0</span> Leave
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly Attendance Sheet View -->
+<div id="monthlySheetView">
+    <div class="row mb-3 filter-row">
+        <div class="col-md-3">
+            <label for="monthYearPicker" class="form-label">Month & Year</label>
+            <input type="month" class="form-control" id="monthYearPicker" 
+                   value="{{ selected_date[:7] }}" onchange="loadMonthlySheet()">
+        </div>
+        <div class="col-md-3">
+            <label for="monthlyCompanyFilter" class="form-label">Company</label>
+            <select class="form-select" id="monthlyCompanyFilter" onchange="loadMonthlySheet()">
+                <option value="">All Companies</option>
+                {% for company in companies %}
+                <option value="{{ company.id }}" {% if company.id|string == selected_company %}selected{% endif %}>
+                    {{ company.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label for="monthlyEmployeeFilter" class="form-label">Employee</label>
+            <select class="form-select" id="monthlyEmployeeFilter" onchange="loadMonthlySheet()">
+                <option value="">All Employees</option>
+                <!-- Will be populated by JavaScript -->
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-success" onclick="saveMonthlyAttendance()">
+                    <i class="fas fa-save me-1"></i>Save All
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-warning" onclick="assignHolidays()">
+                    <i class="fas fa-calendar-plus me-1"></i>Assign Holidays
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-info" onclick="testDatabase()">
+                    <i class="fas fa-database me-1"></i>Test DB
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-secondary" onclick="testEcho()">
+                    <i class="fas fa-comment me-1"></i>Test API
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-dark" onclick="debugAttendanceMarking()">
+                    <i class="fas fa-bug me-1"></i>Debug Data
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">&nbsp;</label>
+            <div class="d-grid">
+                <button class="btn btn-outline-primary" onclick="testInsertAttendance()">
+                    <i class="fas fa-plus me-1"></i>Test Insert
+                </button>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <!-- Spacer for better alignment -->
+        </div>
+    </div>
+
+    <!-- Monthly Sheet Table -->
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm monthly-sheet-table" id="monthlySheetTable">
+            <thead>
+                <tr class="table-dark">
+                    <th rowspan="2" class="text-center align-middle">Sr No</th>
+                    <th rowspan="2" class="text-center align-middle">Emp Name</th>
+                    <th rowspan="2" class="text-center align-middle">Emp ID</th>
+                    <th rowspan="2" class="text-center align-middle">Shift Type</th>
+                    <th rowspan="2" class="text-center align-middle">Company</th>
+                    <th colspan="31" class="text-center">Daily Attendance</th>
+                </tr>
+                <tr class="table-dark" id="monthlyDateHeaders">
+                    <!-- Date headers will be populated by JavaScript -->
+                </tr>
+            </thead>
+            <tbody id="monthlySheetBody">
+                <!-- Monthly data will be populated by JavaScript -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+
+
+<!-- Status Update Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Update Attendance Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="statusForm">
+                    <div class="mb-3">
+                        <label for="statusSelect" class="form-label">Status</label>
+                        <select class="form-select" id="statusSelect" required>
+                            <option value="present">Present</option>
+                            <option value="absent">Absent</option>
+                            <option value="leave">Leave</option>
+                            <option value="half_day">Half Day</option>
+                            <option value="late">Late</option>
+                            <option value="weekend">Weekend</option>
+                            <option value="holiday">Holiday</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="workingHours" class="form-label">Working Hours</label>
+                        <input type="number" class="form-control" id="workingHours" step="0.5" min="0" max="24" value="8">
+                    </div>
+                    <div class="mb-3">
+                        <label for="overtimeHours" class="form-label">Overtime Hours</label>
+                        <input type="number" class="form-control" id="overtimeHours" step="0.5" min="0" max="24" value="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="lateMinutes" class="form-label">Late Minutes</label>
+                        <input type="number" class="form-control" id="lateMinutes" min="0" max="480" value="0">
+                    </div>
+                    <div class="mb-3">
+                        <label for="remarks" class="form-label">Remarks</label>
+                        <textarea class="form-control" id="remarks" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveStatus()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Holiday Assignment Modal -->
+<div class="modal fade" id="holidayModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-calendar-plus me-2"></i>Assign Holidays
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="holidayDate" class="form-label">Holiday Date</label>
+                        <input type="date" class="form-control" id="holidayDate" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="holidayName" class="form-label">Holiday Name</label>
+                        <input type="text" class="form-control" id="holidayName" placeholder="e.g., Public Holiday, Company Holiday" required>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="holidayCompany" class="form-label">Company (Optional)</label>
+                        <select class="form-select" id="holidayCompany">
+                            <option value="">All Companies</option>
+                            {% for company in companies %}
+                            <option value="{{ company.id }}">{{ company.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="holidayEmployees" class="form-label">Employees</label>
+                        <select class="form-select" id="holidayEmployees" multiple size="5">
+                            <!-- Will be populated by JavaScript -->
+                        </select>
+                        <small class="text-muted">Hold Ctrl/Cmd to select multiple employees</small>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Note:</strong> 
+                    <ul class="mb-0 mt-2">
+                        <li>Leave company blank to apply to all companies</li>
+                        <li>Select specific employees to apply holiday only to them</li>
+                        <li>Weekends are automatically marked as holidays</li>
+                        <li>Night shift employees are not auto-marked and need manual holiday assignment</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveHolidayAssignment()">
+                    <i class="fas fa-save me-2"></i>Assign Holiday
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentUserId = null;
+
+function filterAttendance() {
+    const date = document.getElementById('dateFilter').value;
+    const company = document.getElementById('companyFilter').value;
+    
+    let url = `/attendance_marking?date=${date}`;
+    if (company) {
+        url += `&company_id=${company}`;
+    }
+    
+    window.location.href = url;
+}
+
+function updateStatus(userid, status) {
+    currentUserId = userid;
+    // Auto-save when status changes
+    saveAttendance(userid);
+}
+
+function updateWorkingHours(userid, hours) {
+    currentUserId = userid;
+    // Auto-save when hours change
+    saveAttendance(userid);
+}
+
+function updateOvertimeHours(userid, hours) {
+    currentUserId = userid;
+    // Auto-save when overtime changes
+    saveAttendance(userid);
+}
+
+function updateLateMinutes(userid, minutes) {
+    currentUserId = userid;
+    // Auto-save when late minutes change
+    saveAttendance(userid);
+}
+
+function updateRemarks(userid, remarks) {
+    currentUserId = userid;
+    // Auto-save when remarks change
+    saveAttendance(userid);
+}
+
+function saveAttendance(userid) {
+    const row = document.querySelector(`tr[data-userid="${userid}"]`);
+    const status = row.querySelector('.status-select').value;
+    const workingHours = parseFloat(row.querySelector('.working-hours').value) || 0;
+    const overtimeHours = parseFloat(row.querySelector('.overtime-hours').value) || 0;
+    const lateMinutes = parseInt(row.querySelector('.late-minutes').value) || 0;
+    const remarks = row.querySelector('.remarks').value || '';
+    
+    const data = {
+        userid: userid,
+        date: document.getElementById('dateFilter').value,
+        status: status,
+        working_hours: workingHours,
+        overtime_hours: overtimeHours,
+        late_minutes: lateMinutes,
+        remarks: remarks
+    };
+    
+    fetch('/api/attendance_marking', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Attendance updated successfully');
+            updateCounts();
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error updating attendance');
+        console.error('Error:', error);
+    });
+}
+
+function autoMarkAttendance() {
+    const date = document.getElementById('dateFilter').value;
+    
+    fetch('/api/auto_mark_attendance', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ date: date })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+            // Reload page to show updated data
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error auto-marking attendance');
+        console.error('Error:', error);
+    });
+}
+
+function calculateSalary() {
+    const date = new Date(document.getElementById('dateFilter').value);
+    const month = date.toLocaleString('default', { month: 'long' });
+    const year = date.getFullYear();
+    
+    fetch('/api/calculate_salary', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ month: month, year: year })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', data.message);
+        } else {
+            showAlert('danger', data.message);
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error calculating salary');
+        console.error('Error:', error);
+    });
+}
+
+function updateCounts() {
+    const rows = document.querySelectorAll('tbody tr');
+    let present = 0, absent = 0, leave = 0;
+    
+    rows.forEach(row => {
+        const status = row.querySelector('.status-select').value;
+        if (status === 'present') present++;
+        else if (status === 'absent') absent++;
+        else if (status === 'leave') leave++;
+    });
+    
+    document.getElementById('presentCount').textContent = present;
+    document.getElementById('absentCount').textContent = absent;
+    document.getElementById('leaveCount').textContent = leave;
+}
+
+function exportAttendance() {
+    const date = document.getElementById('dateFilter').value;
+    const company = document.getElementById('companyFilter').value;
+    
+    let url = `/api/export_attendance?date=${date}`;
+    if (company) {
+        url += `&company_id=${company}`;
+    }
+    
+    window.open(url, '_blank');
+}
+
+function assignHolidays() {
+    // Set today's date as default
+    document.getElementById('holidayDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('holidayName').value = '';
+    document.getElementById('holidayCompany').value = '';
+    
+    // Load employees for the selected company
+    loadEmployeesForHoliday();
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('holidayModal'));
+    modal.show();
+}
+
+function loadEmployeesForHoliday() {
+    const companyId = document.getElementById('holidayCompany').value;
+    const employeeSelect = document.getElementById('holidayEmployees');
+    
+    // Clear existing options
+    employeeSelect.innerHTML = '';
+    
+    // Fetch employees
+    fetch(`/api/employees?company_id=${companyId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            data.employees.forEach(employee => {
+                const option = document.createElement('option');
+                option.value = employee.userid;
+                option.textContent = `${employee.name} (${employee.shift_type || 'Not set'})`;
+                employeeSelect.appendChild(option);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error loading employees:', error);
+    });
+}
+
+function saveHolidayAssignment() {
+    const date = document.getElementById('holidayDate').value;
+    const name = document.getElementById('holidayName').value;
+    const companyId = document.getElementById('holidayCompany').value;
+    const employeeIds = Array.from(document.getElementById('holidayEmployees').selectedOptions).map(opt => opt.value);
+    
+    if (!date || !name) {
+        showAlert('danger', 'Please fill in all required fields');
+        return;
+    }
+    
+    const data = {
+        date: date,
+        name: name,
+        company_id: companyId || null,
+        employee_ids: employeeIds
+    };
+    
+    fetch('/api/assign_holiday', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Holiday assigned successfully!');
+            // Close modal
+            bootstrap.Modal.getInstance(document.getElementById('holidayModal')).hide();
+            // Reload monthly sheet
+            loadMonthlySheet();
+        } else {
+            showAlert('danger', data.message || 'Error assigning holiday');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error assigning holiday');
+        console.error('Error:', error);
+    });
+}
+
+function updateHolidayName(date, newName) {
+    if (!newName.trim()) {
+        showAlert('danger', 'Holiday name cannot be empty');
+        return;
+    }
+    
+    fetch('/api/update_holiday_name', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            date: date,
+            name: newName.trim()
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', 'Holiday name updated successfully!');
+        } else {
+            showAlert('danger', data.message || 'Error updating holiday name');
+        }
+    })
+    .catch(error => {
+        showAlert('danger', 'Error updating holiday name');
+        console.error('Error:', error);
+    });
+}
+
+// Initialize counts on page load
+document.addEventListener('DOMContentLoaded', function() {
+    updateCounts();
+    
+    // Load monthly sheet by default
+    loadMonthlySheet();
+    
+    // Add event listeners for filters
+    document.getElementById('monthlyCompanyFilter').addEventListener('change', function() {
+        const companyId = this.value;
+        populateEmployeeFilter(companyId);
+        loadMonthlySheet();
+    });
+    
+    document.getElementById('monthlyEmployeeFilter').addEventListener('change', loadMonthlySheet);
+    
+    // Add event listener for holiday company filter
+    document.getElementById('holidayCompany').addEventListener('change', loadEmployeesForHoliday);
+    
+    // Initial population of employee filter
+    populateEmployeeFilter();
+});
+
+// Monthly Sheet Functions
+function loadMonthlySheet() {
+    const monthYear = document.getElementById('monthYearPicker').value;
+    const company = document.getElementById('monthlyCompanyFilter').value;
+    const employee = document.getElementById('monthlyEmployeeFilter').value;
+    
+    if (!monthYear) return;
+    
+    const [year, month] = monthYear.split('-');
+    
+    // Generate date headers for the month
+    generateDateHeaders(year, month);
+    
+    // Load monthly data
+    fetchMonthlyAttendance(year, month, company, employee);
+}
+
+function populateEmployeeFilter(companyId = '') {
+    const employeeFilter = document.getElementById('monthlyEmployeeFilter');
+    employeeFilter.innerHTML = '<option value="">All Employees</option>';
+    
+    fetch(`/api/employees?company_id=${companyId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            data.employees.forEach(employee => {
+                const option = document.createElement('option');
+                option.value = employee.userid;
+                option.textContent = employee.name;
+                employeeFilter.appendChild(option);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error loading employees:', error);
+    });
+}
+
+function generateDateHeaders(year, month) {
+    const dateHeaders = document.getElementById('monthlyDateHeaders');
+    dateHeaders.innerHTML = '';
+    
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month - 1, day);
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday = 0, Saturday = 6
+        
+        const th = document.createElement('th');
+        th.className = 'text-center';
+        th.style.width = '40px';
+        th.style.fontSize = '0.8rem';
+        
+        if (isWeekend) {
+            th.className += ' table-warning';
+        }
+        
+        th.textContent = day;
+        dateHeaders.appendChild(th);
+    }
+}
+
+function fetchMonthlyAttendance(year, month, company, employee) {
+    // Show loading
+    document.getElementById('monthlySheetBody').innerHTML = '<tr><td colspan="36" class="text-center">Loading...</td></tr>';
+    
+    // Build query parameters
+    let url = `/api/monthly_attendance?year=${year}&month=${month}`;
+    if (company) url += `&company_id=${company}`;
+    if (employee) url += `&employee_id=${employee}`;
+    
+    // Fetch attendance data for the month
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Received monthly attendance data:', data); // Debug log
+            if (data.success) {
+                console.log('Attendance data:', data.attendance); // Debug log
+                console.log('Holidays data:', data.holidays); // Debug log
+                populateMonthlySheet(data.attendance, data.holidays);
+            } else {
+                document.getElementById('monthlySheetBody').innerHTML = 
+                    '<tr><td colspan="36" class="text-center text-danger">Error loading data</td></tr>';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('monthlySheetBody').innerHTML = 
+                '<tr><td colspan="36" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function populateMonthlySheet(attendance, holidays) {
+    console.log('Populating monthly sheet with:', attendance.length, 'users'); // Debug log
+    const tbody = document.getElementById('monthlySheetBody');
+    tbody.innerHTML = '';
+    
+    attendance.forEach((user, index) => {
+        console.log(`Processing user ${index + 1}: ${user.name} (ID: ${user.userid})`); // Debug log
+        console.log(`User daily attendance:`, user.daily_attendance); // Debug log
+        const row = document.createElement('tr');
+        
+        // Employee info columns
+        row.innerHTML = `
+            <td class="text-center">${index + 1}</td>
+            <td class="employee-info"><strong>${user.name}</strong></td>
+            <td class="text-center">AGO${user.userid.toString().padStart(3, '0')}</td>
+            <td class="text-center">
+                <span class="badge bg-${user.shift_type === 'night' ? 'danger' : 'secondary'}">${user.shift_type || 'Not set'}</span>
+            </td>
+            <td class="employee-info">${user.company_name || 'Not set'}</td>
+        `;
+        
+        // Daily attendance columns
+        const daysInMonth = new Date(user.year, user.month, 0).getDate();
+        
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(user.year, user.month - 1, day);
+            const dateStr = `${user.year}-${user.month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+            
+            const td = document.createElement('td');
+            td.className = 'text-center status-cell';
+            
+            // Check if it's a weekend
+            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+            
+            // Check if it's a holiday
+            const holiday = holidays.find(h => h.date === dateStr);
+            
+            if (isWeekend) {
+                td.className += ' weekend-cell';
+                td.innerHTML = '<span class="badge bg-warning">H</span>';
+                td.title = 'Weekend';
+            } else if (holiday) {
+                td.className += ' holiday-cell';
+                // Create editable holiday input
+                const holidayInput = document.createElement('input');
+                holidayInput.type = 'text';
+                holidayInput.className = 'form-control form-control-sm holiday-input';
+                holidayInput.value = holiday.name;
+                holidayInput.placeholder = 'Holiday Name';
+                holidayInput.style.fontSize = '0.7rem';
+                holidayInput.style.padding = '2px 4px';
+                holidayInput.style.textAlign = 'center';
+                holidayInput.style.border = 'none';
+                holidayInput.style.background = 'transparent';
+                holidayInput.title = 'Click to edit holiday name';
+                
+                holidayInput.onchange = function() {
+                    updateHolidayName(dateStr, this.value);
+                };
+                
+                td.appendChild(holidayInput);
+            } else {
+                // Get attendance status for this day
+                const dayAttendance = user.daily_attendance.find(d => d.date === dateStr);
+                console.log(`Day ${dateStr} for user ${user.userid}:`, dayAttendance); // Debug log
+                let status = '';
+                let isAutoMarked = false;
+                
+                // Auto-mark attendance for day shift employees based on records
+                if (user.shift_type !== 'night' && dayAttendance) {
+                    if (dayAttendance.check_in && dayAttendance.check_out) {
+                        status = 'present';
+                        isAutoMarked = true;
+                    } else if (dayAttendance.check_in) {
+                        status = 'present'; // Partial day but marked as present
+                        isAutoMarked = true;
+                    }
+                }
+                
+                // Create status dropdown
+                const select = document.createElement('select');
+                select.className = 'form-select form-select-sm border-0 bg-transparent';
+                select.style.fontSize = '0.75rem';
+                select.style.padding = '2px 4px';
+                select.style.minWidth = '50px';
+                select.style.textAlign = 'center';
+                select.setAttribute('data-userid', user.userid);
+                select.setAttribute('data-date', dateStr);
+                select.onchange = function() { updateMonthlyStatus(this); };
+                
+                // Different options for night shift vs day shift
+                if (user.shift_type === 'night') {
+                    // Night shift - manual marking only
+                    select.innerHTML = `
+                        <option value="">-</option>
+                        <option value="present" ${status === 'present' ? 'selected' : ''}>P</option>
+                        <option value="absent" ${status === 'absent' ? 'selected' : ''}>A</option>
+                        <option value="half_day" ${status === 'half_day' ? 'selected' : ''}>HD</option>
+                        <option value="leave" ${status === 'leave' ? 'selected' : ''}>L</option>
+                        <option value="late" ${status === 'late' ? 'selected' : ''}>LT</option>
+                        <option value="holiday" ${status === 'holiday' ? 'selected' : ''}>H</option>
+                        <option value="na" ${status === 'na' ? 'selected' : ''}>NA</option>
+                    `;
+                } else {
+                    // Day shift - auto-marked + manual options
+                    select.innerHTML = `
+                        <option value="">-</option>
+                        <option value="present" ${status === 'present' ? 'selected' : ''}>P</option>
+                        <option value="absent" ${status === 'absent' ? 'selected' : ''}>A</option>
+                        <option value="half_day" ${status === 'half_day' ? 'selected' : ''}>HD</option>
+                        <option value="leave" ${status === 'leave' ? 'selected' : ''}>L</option>
+                        <option value="late" ${status === 'late' ? 'selected' : ''}>LT</option>
+                        <option value="holiday" ${status === 'holiday' ? 'selected' : ''}>H</option>
+                        <option value="na" ${status === 'na' ? 'selected' : ''}>NA</option>
+                    `;
+                }
+                
+                // Set the auto-marked status
+                if (isAutoMarked) {
+                    select.value = status;
+                    // Auto-save the status
+                    setTimeout(() => {
+                        saveMonthlyAttendanceItem(user.userid, dateStr, status);
+                    }, 100);
+                }
+                
+                // Apply initial status styling
+                if (status) {
+                    console.log(`Setting status for user ${user.userid} on ${dateStr}: ${status}`); // Debug log
+                    td.classList.add(`status-${status}`);
+                }
+                
+                td.appendChild(select);
+            }
+            
+            row.appendChild(td);
+        }
+        
+        tbody.appendChild(row);
+    });
+    
+    console.log('Monthly sheet population completed'); // Debug log
+}
+
+function updateMonthlyStatus(select) {
+    const userid = select.getAttribute('data-userid');
+    const date = select.getAttribute('data-date');
+    const status = select.value;
+    
+    // Update cell styling based on status
+    const cell = select.closest('td');
+    if (cell) {
+        // Remove all status classes
+        cell.classList.remove('status-present', 'status-absent', 'status-half-day', 'status-leave', 'status-late', 'status-holiday', 'status-na');
+        
+        // Add new status class
+        if (status) {
+            cell.classList.add(`status-${status}`);
+        }
+    }
+    
+    // Auto-save when status changes
+    if (status) {
+        saveMonthlyAttendanceItem(userid, date, status);
+    } else {
+        // Clear the marking if status is empty
+        clearAttendanceMarking(userid, date);
+    }
+}
+
+function saveMonthlyAttendanceItem(userid, date, status) {
+    const data = {
+        userid: parseInt(userid),
+        date: date,
+        status: status,
+        working_hours: status === 'present' ? 8.0 : (status === 'na' ? 0.0 : 0.0),
+        overtime_hours: 0.0,
+        late_minutes: 0,
+        remarks: status === 'na' ? 'Not joined yet' : ''
+    };
+    
+    console.log('Saving attendance:', data); // Debug log
+    
+    fetch('/api/attendance_marking', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => {
+        console.log('Response status:', response.status); // Debug response status
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data); // Debug response data
+        if (data.success) {
+            console.log('Attendance saved successfully:', data); // Debug log
+            showAlert('success', 'Attendance saved successfully!');
+            
+            // Show success indicator
+            const select = document.querySelector(`select[data-userid="${userid}"][data-date="${date}"]`);
+            if (select) {
+                select.style.backgroundColor = '#d4edda';
+                setTimeout(() => {
+                    select.style.backgroundColor = '';
+                }, 1000);
+            }
+            
+            // If status is holiday, prompt for holiday name
+            if (status === 'holiday') {
+                const holidayName = prompt('Enter holiday name:');
+                if (holidayName && holidayName.trim()) {
+                    updateHolidayName(date, holidayName.trim());
+                }
+            }
+        } else {
+            console.error('Failed to save attendance:', data); // Debug log
+            showAlert('danger', data.message || 'Error saving attendance');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving attendance:', error);
+        showAlert('danger', 'Error saving attendance: ' + error.message);
+    });
+}
+
+function saveMonthlyAttendance() {
+    // This function saves all changes at once
+    const statusSelects = document.querySelectorAll('#monthlySheetTable select[data-userid][data-date]');
+    let savedCount = 0;
+    let totalCount = 0;
+    
+    statusSelects.forEach(select => {
+        if (select.value) {
+            totalCount++;
+            const userid = select.getAttribute('data-userid');
+            const date = select.getAttribute('data-date');
+            const status = select.value;
+            
+            // Save each attendance item
+            saveMonthlyAttendanceItem(userid, date, status);
+            savedCount++;
+        }
+    });
+    
+    if (totalCount > 0) {
+        showAlert('success', `Saving ${savedCount} attendance records...`);
+        // Reload the sheet after a short delay to show updated data
+        setTimeout(() => {
+            loadMonthlySheet();
+        }, 2000);
+    } else {
+        showAlert('info', 'No attendance changes to save');
+    }
+}
+
+function clearAttendanceMarking(userid, date) {
+    // Clear attendance marking for a specific user and date
+    fetch('/api/clear_attendance_marking', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            userid: parseInt(userid),
+            date: date
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Attendance marking cleared successfully');
+        } else {
+            console.error('Failed to clear attendance marking:', data);
+        }
+    })
+    .catch(error => {
+        console.error('Error clearing attendance marking:', error);
+    });
+}
+
+function testDatabase() {
+    console.log('Testing database connection...');
+    
+    fetch('/api/test_attendance_marking')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Database test results:', data);
+            showAlert('success', `Database OK! Table has ${data.total_records} records. Check console for details.`);
+        } else {
+            console.error('Database test failed:', data);
+            showAlert('danger', 'Database test failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error testing database:', error);
+        showAlert('danger', 'Error testing database: ' + error.message);
+    });
+}
+
+function testEcho() {
+    console.log('Testing API echo...');
+    
+    const testData = {
+        userid: 1,
+        date: '2025-01-01',
+        status: 'present',
+        working_hours: 8.0
+    };
+    
+    fetch('/api/echo', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Echo test successful:', data);
+            showAlert('success', 'API echo test successful! Check console for details.');
+        } else {
+            console.error('Echo test failed:', data);
+            showAlert('danger', 'Echo test failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error testing echo:', error);
+        showAlert('danger', 'Error testing echo: ' + error.message);
+    });
+}
+
+function debugAttendanceMarking() {
+    console.log('Debugging attendance marking data...');
+    
+    fetch('/api/debug_attendance_marking')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Debug data:', data);
+            showAlert('success', `Debug data loaded! ${data.total_records} records found. Check console for details.`);
+        } else {
+            console.error('Debug failed:', data);
+            showAlert('danger', 'Debug failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error debugging:', error);
+        showAlert('danger', 'Error debugging: ' + error.message);
+    });
+}
+
+function testInsertAttendance() {
+    console.log('Testing attendance insert...');
+    
+    fetch('/api/test_insert_attendance')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Test insert successful:', data);
+            showAlert('success', 'Test insert successful! Check console for details.');
+            
+            // Reload the monthly sheet to see if the test data appears
+            setTimeout(() => {
+                loadMonthlySheet();
+            }, 1000);
+        } else {
+            console.error('Test insert failed:', data);
+            showAlert('danger', 'Test insert failed: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error testing insert:', error);
+        showAlert('danger', 'Error testing insert: ' + error.message);
+    });
+}
+</script>
+
+<style>
+/* Monthly Sheet Styling */
+#monthlySheetTable {
+    font-size: 0.8rem;
+}
+
+#monthlySheetTable th {
+    background-color: #343a40 !important;
+    color: white !important;
+    border: 1px solid #495057;
+    vertical-align: middle;
+    text-align: center;
+}
+
+#monthlySheetTable td {
+    border: 1px solid #dee2e6;
+    vertical-align: middle;
+    padding: 2px !important;
+}
+
+#monthlySheetTable .table-warning {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+}
+
+/* Status colors matching Excel format */
+.status-present {
+    background-color: #d4edda !important;
+    color: #155724 !important;
+    font-weight: bold;
+}
+
+.status-absent {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+    font-weight: bold;
+}
+
+.status-half_day {
+    background-color: #fff3cd !important;
+    color: #856404 !important;
+    font-weight: bold;
+}
+
+.status-leave {
+    background-color: #d1ecf1 !important;
+    color: #0c5460 !important;
+    font-weight: bold;
+}
+
+.status-late {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+    font-weight: bold;
+}
+
+.status-weekend {
+    background-color: #e2e3e5 !important;
+    color: #383d41 !important;
+    font-weight: bold;
+}
+
+.status-holiday {
+    background-color: #cce5ff !important;
+    color: #004085 !important;
+    font-weight: bold;
+}
+
+/* Compact form controls for monthly view */
+#monthlySheetTable .form-select {
+    padding: 0.1rem 0.2rem;
+    font-size: 0.7rem;
+    border: 1px solid #ced4da;
+    border-radius: 0.2rem;
+}
+
+#monthlySheetTable .form-select:focus {
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Employee info columns styling */
+#monthlySheetTable td:nth-child(1) { /* Sr No */
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: center;
+}
+
+#monthlySheetTable td:nth-child(2) { /* Emp Name */
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: left;
+}
+
+#monthlySheetTable td:nth-child(3) { /* Emp ID */
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: center;
+}
+
+#monthlySheetTable td:nth-child(4) { /* Reporting Manager */
+    background-color: #f8f9fa;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* Weekend highlighting */
+.weekend-cell {
+    background-color: #fff3cd !important;
+}
+
+/* Holiday highlighting */
+.holiday-cell {
+    background-color: #cce5ff !important;
+}
+</style>
+{% endblock %}

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session, send_file
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
 from flask_mail import Mail, Message
 import sqlite3
 from datetime import datetime, timedelta
@@ -1101,7 +1101,6 @@ def pull_data_from_device(device_ip, device_port):
                 except:
                     pass
             
-            print("✓ Successfully pulled data from device")
             return True, f"Successfully pulled {len(users)} users and {len(attendance_records)} attendance records"
             
         except Exception as e:
@@ -1121,7 +1120,6 @@ def pull_data_from_device(device_ip, device_port):
             return False, f"Error processing device data: {str(e)}"
             
     except Exception as e:
-        print(f"Error connecting to device: {e}")
         return False, f"Error connecting to device: {str(e)}"
 
 def sync_users_from_device(device_ip, device_port):
@@ -2605,12 +2603,6 @@ def attendance_marking():
                          is_weekend=is_weekend,
                          holiday=holiday)
 
-@app.route('/automatic_attendance')
-@login_required
-def automatic_attendance():
-    """Automatic attendance system page"""
-    return render_template('automatic_attendance.html')
-
 @app.route('/salary')
 @login_required
 def salary():
@@ -2680,11 +2672,10 @@ def analytics():
 @app.route('/api/attendance_marking', methods=['POST'])
 # @login_required  # Temporarily commented out for debugging
 def api_attendance_marking():
-    """Mark attendance for a user - SIMPLE DIRECT METHOD"""
+    """Mark attendance for a user"""
     try:
         data = request.get_json()
-        print(f"=== ATTENDANCE MARKING API CALLED ===")
-        print(f"Raw data received: {data}")
+        print(f"Received data: {data}")  # Debug log
         
         userid = data.get('userid')
         date = data.get('date')
@@ -2694,105 +2685,58 @@ def api_attendance_marking():
         late_minutes = data.get('late_minutes', 0)
         remarks = data.get('remarks', '')
         
-        print(f"Parsed values:")
-        print(f"  userid: {userid} (type: {type(userid)})")
-        print(f"  date: {date} (type: {type(date)})")
-        print(f"  status: {status} (type: {type(status)})")
-        print(f"  working_hours: {working_hours}")
-        print(f"  overtime_hours: {overtime_hours}")
-        print(f"  late_minutes: {late_minutes}")
-        print(f"  remarks: {remarks}")
+        print(f"Parsed data - userid: {userid}, date: {date}, status: {status}")  # Debug log
         
         if not userid or not date or not status:
-            error_msg = f"Missing required fields: userid={userid}, date={date}, status={status}"
-            print(f"ERROR: {error_msg}")
-            return jsonify({'success': False, 'message': error_msg})
-        
-        # Convert userid to integer if it's a string
-        try:
-            userid = int(userid)
-        except (ValueError, TypeError):
-            print(f"ERROR: Invalid userid format: {userid}")
-            return jsonify({'success': False, 'message': f'Invalid userid format: {userid}'})
-        
-        print(f"=== DATABASE OPERATION STARTING ===")
+            return jsonify({'success': False, 'message': 'Missing required fields'})
         
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # First, let's check if the table exists and see its structure
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='attendance_marking'")
-        table_exists = cursor.fetchone()
-        print(f"Table attendance_marking exists: {table_exists is not None}")
-        
-        if table_exists:
-            cursor.execute("PRAGMA table_info(attendance_marking)")
-            columns = cursor.fetchall()
-            print(f"Table columns: {[col[1] for col in columns]}")
-        
         # Check if marking already exists
         cursor.execute('SELECT * FROM attendance_marking WHERE userid = ? AND date = ?', (userid, date))
         existing = cursor.fetchone()
-        print(f"Existing marking found: {existing is not None}")
+        
+        print(f"Existing marking: {existing}")  # Debug log
+        
+        # Also check what's in the table for this user
+        cursor.execute('SELECT * FROM attendance_marking WHERE userid = ? ORDER BY date', (userid,))
+        all_markings = cursor.fetchall()
+        print(f"All markings for user {userid}: {len(all_markings)} records")
+        for marking in all_markings[:5]:  # Show first 5
+            print(f"  {marking['date']}: {marking['status']}")
+        
         if existing:
-            print(f"Existing data: {dict(existing)}")
+            # Update existing marking
+            print(f"Updating existing marking for user {userid} on {date}")  # Debug log
+            cursor.execute('''UPDATE attendance_marking 
+                             SET status = ?, working_hours = ?, overtime_hours = ?, 
+                                 late_minutes = ?, remarks = ?, marked_by = ?
+                             WHERE userid = ? AND date = ?''', 
+                          (status, working_hours, overtime_hours, late_minutes, remarks, 'admin', userid, date))
+        else:
+            # Create new marking
+            print(f"Creating new marking for user {userid} on {date}")  # Debug log
+            cursor.execute('''INSERT INTO attendance_marking 
+                             (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, marked_by)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                          (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, 'admin'))
         
-        # Use INSERT OR REPLACE for simplicity - this will either insert new or update existing
-        print(f"=== EXECUTING INSERT OR REPLACE ===")
-        
-        sql = '''INSERT OR REPLACE INTO attendance_marking 
-                 (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, marked_by)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
-        
-        values = (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, 'admin')
-        print(f"SQL: {sql}")
-        print(f"Values: {values}")
-        
-        cursor.execute(sql, values)
-        print(f"SQL executed successfully")
-        
-        # Commit the transaction
         conn.commit()
-        print(f"Database committed successfully")
+        print(f"Database committed successfully")  # Debug log
         
         # Verify the data was saved
         cursor.execute('SELECT * FROM attendance_marking WHERE userid = ? AND date = ?', (userid, date))
         saved_data = cursor.fetchone()
-        print(f"Verification query executed")
-        
-        if saved_data:
-            print(f"✓ Data verified successfully:")
-            print(f"  Saved data: {dict(saved_data)}")
-        else:
-            print(f"⚠️  WARNING: Data verification failed - no data found after save!")
-        
-        # Get total count for this user
-        cursor.execute('SELECT COUNT(*) FROM attendance_marking WHERE userid = ?', (userid,))
-        total_count = cursor.fetchone()[0]
-        print(f"Total markings for user {userid}: {total_count}")
+        print(f"Verified saved data: {saved_data}")  # Debug log
         
         conn.close()
-        print(f"=== DATABASE OPERATION COMPLETED ===")
         
-        return jsonify({
-            'success': True, 
-            'message': 'Attendance marked successfully',
-            'userid': userid,
-            'date': date,
-            'status': status,
-            'total_markings': total_count
-        })
+        return jsonify({'success': True, 'message': 'Attendance marked successfully'})
         
     except Exception as e:
-        import traceback
-        print(f"=== ERROR IN ATTENDANCE MARKING API ===")
-        print(f"Error type: {type(e)}")
-        print(f"Error message: {str(e)}")
-        print(f"Full traceback:")
-        traceback.print_exc()
+        print(f"Error in attendance_marking API: {str(e)}")  # Debug log
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-
 
 @app.route('/api/holidays', methods=['GET', 'POST'])
 @login_required
@@ -2981,7 +2925,94 @@ def api_calculate_salary():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
-
+@app.route('/api/auto_mark_attendance', methods=['POST'])
+@login_required
+def api_auto_mark_attendance():
+    """Automatically mark attendance based on biometric data"""
+    try:
+        data = request.get_json()
+        date = data.get('date', datetime.now().strftime('%Y-%m-%d'))
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get all users
+        cursor.execute('SELECT userid, shift_start_time, shift_end_time, shift_type, working_hours_per_day FROM users')
+        users = cursor.fetchall()
+        
+        # Check if date is weekend or holiday
+        date_obj = datetime.strptime(date, '%Y-%m-%d')
+        is_weekend = date_obj.weekday() >= 5
+        
+        cursor.execute('SELECT * FROM holidays WHERE date = ?', (date,))
+        holiday = cursor.fetchone()
+        
+        marked_count = 0
+        
+        for user in users:
+            userid = user['userid']
+            
+            # Skip if weekend or holiday (unless user is marked as working)
+            if (is_weekend or holiday) and not holiday:
+                # Mark as weekend/holiday
+                cursor.execute('''INSERT OR REPLACE INTO attendance_marking 
+                                 (userid, date, status, working_hours, remarks)
+                                 VALUES (?, ?, ?, ?, ?)''', 
+                              (userid, date, 'weekend' if is_weekend else 'holiday', 0.0, 
+                               'Weekend' if is_weekend else f"Holiday: {holiday['name']}"))
+                marked_count += 1
+                continue
+            
+            # Get biometric attendance for this user and date
+            cursor.execute('''SELECT check_in, check_out, working_hours 
+                             FROM attendance 
+                             WHERE userid = ? AND DATE(timestamp) = ?''', (userid, date))
+            
+            attendance_record = cursor.fetchone()
+            
+            if attendance_record and attendance_record['check_in'] and attendance_record['check_out']:
+                # User has biometric attendance
+                working_hours = attendance_record['working_hours'] or 0.0
+                daily_hours = user['working_hours_per_day']
+                
+                # Determine status based on working hours
+                if working_hours >= daily_hours * 0.8:  # 80% of required hours
+                    status = 'present'
+                elif working_hours >= daily_hours * 0.5:  # 50% of required hours
+                    status = 'half_day'
+                else:
+                    status = 'late'
+                
+                # Calculate overtime
+                overtime_hours = max(0, working_hours - daily_hours)
+                
+                # Calculate late minutes
+                late_minutes = 0
+                if status == 'late':
+                    late_minutes = int((daily_hours - working_hours) * 60)
+                
+                cursor.execute('''INSERT OR REPLACE INTO attendance_marking 
+                                 (userid, date, status, working_hours, overtime_hours, late_minutes, remarks)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+                              (userid, date, status, working_hours, overtime_hours, late_minutes, 'Auto-marked from biometric'))
+                
+                marked_count += 1
+            else:
+                # No biometric attendance - mark as absent
+                cursor.execute('''INSERT OR REPLACE INTO attendance_marking 
+                                 (userid, date, status, working_hours, remarks)
+                                 VALUES (?, ?, ?, ?, ?)''', 
+                              (userid, date, 'absent', 0.0, 'No biometric attendance'))
+                
+                marked_count += 1
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': f'Automatically marked attendance for {marked_count} users'})
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
 
 @app.route('/api/monthly_attendance')
 @login_required
@@ -4517,1019 +4548,6 @@ def send_test_email():
             
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-@app.route('/api/test_device_connection')
-def api_test_device_connection():
-    """Test connection to biometric device"""
-    try:
-        print(f"=== TEST DEVICE CONNECTION API CALLED ===")
-        
-        # Try to connect to device
-        try:
-            from zk import ZK
-            zk = ZK('192.168.1.201', port=4370, timeout=5)
-            conn = zk.connect()
-            
-            if conn:
-                device_info = {
-                    'name': conn.get_device_name(),
-                    'firmware_version': conn.get_firmware_version(),
-                    'serial_number': conn.get_serial_number(),
-                    'platform': conn.get_platform(),
-                    'work_code': conn.get_work_code()
-                }
-                conn.disconnect()
-                
-                print(f"✓ Device connected successfully: {device_info}")
-                return jsonify({
-                    'success': True,
-                    'message': 'Device connected successfully',
-                    'device_info': f"ESSL Identix K90 - {device_info.get('name', 'Connected')}"
-                })
-            else:
-                print(f"⚠️ Could not establish connection to device")
-                return jsonify({
-                    'success': False,
-                    'message': 'Could not establish connection to device'
-                })
-                
-        except Exception as e:
-            print(f"⚠️ Device connection error: {str(e)}")
-            return jsonify({
-                'success': False,
-                'message': f'Device connection error: {str(e)}'
-            })
-            
-    except Exception as e:
-        import traceback
-        print(f"=== ERROR IN TEST DEVICE CONNECTION API ===")
-        print(f"Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-@app.route('/api/get_attendance')
-def api_get_attendance():
-    """Get attendance for a specific user and date"""
-    try:
-        userid = request.args.get('userid', type=int)
-        date = request.args.get('date')
-        
-        if not userid or not date:
-            return jsonify({'success': False, 'message': 'Missing userid or date'})
-        
-        print(f"=== GET ATTENDANCE API CALLED ===")
-        print(f"userid: {userid}, date: {date}")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='attendance_marking'")
-        table_exists = cursor.fetchone()
-        print(f"Table exists: {table_exists is not None}")
-        
-        if not table_exists:
-            conn.close()
-            return jsonify({'success': False, 'message': 'Attendance marking table does not exist'})
-        
-        # Get attendance data
-        cursor.execute('''SELECT * FROM attendance_marking 
-                         WHERE userid = ? AND date = ?''', (userid, date))
-        attendance = cursor.fetchone()
-        
-        conn.close()
-        
-        if attendance:
-            print(f"Found attendance: {dict(attendance)}")
-            return jsonify({
-                'success': True,
-                'attendance': {
-                    'id': attendance['id'],
-                    'userid': attendance['userid'],
-                    'date': attendance['date'],
-                    'status': attendance['status'],
-                    'working_hours': attendance['working_hours'],
-                    'overtime_hours': attendance['overtime_hours'],
-                    'late_minutes': attendance['late_minutes'],
-                    'remarks': attendance['remarks']
-                }
-            })
-        else:
-            print(f"No attendance found for user {userid} on {date}")
-            return jsonify({'success': True, 'attendance': None})
-        
-    except Exception as e:
-        import traceback
-        print(f"=== ERROR IN GET ATTENDANCE API ===")
-        print(f"Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-@app.route('/api/test_simple_save', methods=['POST'])
-def api_test_simple_save():
-    """Simple test endpoint to verify database saving works"""
-    try:
-        data = request.get_json()
-        print(f"=== TEST SIMPLE SAVE API CALLED ===")
-        print(f"Data received: {data}")
-        
-        userid = data.get('userid', 1)
-        date = data.get('date', '2024-01-01')
-        status = data.get('status', 'present')
-        
-        print(f"Test values: userid={userid}, date={date}, status={status}")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='attendance_marking'")
-        table_exists = cursor.fetchone()
-        print(f"Table exists: {table_exists is not None}")
-        
-        if table_exists:
-            # Check table structure
-            cursor.execute("PRAGMA table_info(attendance_marking)")
-            columns = cursor.fetchall()
-            print(f"Table columns: {[col[1] for col in columns]}")
-            
-            # Try to insert a test record
-            sql = '''INSERT OR REPLACE INTO attendance_marking 
-                     (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, marked_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
-            
-            values = (userid, date, status, 8.0, 0.0, 0, 'Test entry', 'test')
-            print(f"Executing: {sql}")
-            print(f"Values: {values}")
-            
-            cursor.execute(sql, values)
-            conn.commit()
-            print(f"✓ Test record inserted successfully")
-            
-            # Verify it was saved
-            cursor.execute('SELECT * FROM attendance_marking WHERE userid = ? AND date = ?', (userid, date))
-            saved = cursor.fetchone()
-            if saved:
-                print(f"✓ Verification successful: {dict(saved)}")
-            else:
-                print(f"⚠️ Verification failed - no record found")
-            
-            # Get total count
-            cursor.execute('SELECT COUNT(*) FROM attendance_marking')
-            total = cursor.fetchone()[0]
-            print(f"Total records in table: {total}")
-        
-        conn.close()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Test save completed',
-            'table_exists': table_exists is not None,
-            'test_values': {'userid': userid, 'date': date, 'status': status}
-        })
-        
-    except Exception as e:
-        import traceback
-        print(f"=== ERROR IN TEST SIMPLE SAVE ===")
-        print(f"Error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-@app.route('/api/save_monthly_attendance', methods=['POST'])
-@login_required
-def api_save_monthly_attendance():
-    """Save all monthly attendance data - SIMPLE DIRECT METHOD"""
-    try:
-        data = request.get_json()
-        print(f"=== SAVE MONTHLY ATTENDANCE API CALLED ===")
-        print(f"Raw data received: {data}")
-        
-        if not data or 'attendance_data' not in data:
-            error_msg = "No attendance_data field in request"
-            print(f"ERROR: {error_msg}")
-            return jsonify({'success': False, 'message': error_msg})
-        
-        attendance_data = data['attendance_data']
-        print(f"Attendance data array length: {len(attendance_data) if attendance_data else 0}")
-        
-        if not attendance_data:
-            return jsonify({'success': False, 'message': 'Empty attendance data array'})
-        
-        print(f"=== DATABASE OPERATION STARTING ===")
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check table structure
-        cursor.execute("PRAGMA table_info(attendance_marking)")
-        columns = cursor.fetchall()
-        print(f"Table columns: {[col[1] for col in columns]}")
-        
-        saved_count = 0
-        error_count = 0
-        errors = []
-        
-        for i, entry in enumerate(attendance_data):
-            try:
-                print(f"--- Processing entry {i+1}/{len(attendance_data)} ---")
-                print(f"Entry data: {entry}")
-                
-                userid = entry.get('userid')
-                date = entry.get('date')
-                status = entry.get('status')
-                working_hours = entry.get('working_hours', 0.0)
-                overtime_hours = entry.get('overtime_hours', 0.0)
-                late_minutes = entry.get('late_minutes', 0)
-                remarks = entry.get('remarks', '')
-                
-                print(f"Parsed values:")
-                print(f"  userid: {userid} (type: {type(userid)})")
-                print(f"  date: {date} (type: {type(date)})")
-                print(f"  status: {status} (type: {type(status)})")
-                
-                if not userid or not date or not status:
-                    error_msg = f"Missing required fields in entry {i+1}: userid={userid}, date={date}, status={status}"
-                    print(f"ERROR: {error_msg}")
-                    errors.append(error_msg)
-                    error_count += 1
-                    continue
-                
-                # Convert userid to integer
-                try:
-                    userid = int(userid)
-                except (ValueError, TypeError):
-                    error_msg = f"Invalid userid format in entry {i+1}: {userid}"
-                    print(f"ERROR: {error_msg}")
-                    errors.append(error_msg)
-                    error_count += 1
-                    continue
-                
-                # Use INSERT OR REPLACE for simplicity
-                sql = '''INSERT OR REPLACE INTO attendance_marking 
-                         (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, marked_by)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'''
-                
-                values = (userid, date, status, working_hours, overtime_hours, late_minutes, remarks, 'admin')
-                print(f"Executing SQL: {sql}")
-                print(f"With values: {values}")
-                
-                cursor.execute(sql, values)
-                print(f"✓ Entry {i+1} saved successfully")
-                
-                saved_count += 1
-                
-            except Exception as e:
-                error_msg = f"Error processing entry {i+1}: {str(e)}"
-                print(f"ERROR: {error_msg}")
-                errors.append(error_msg)
-                error_count += 1
-        
-        print(f"=== COMMITTING TRANSACTION ===")
-        conn.commit()
-        print(f"✓ Database committed successfully")
-        
-        # Verify some saved data
-        if saved_count > 0:
-            cursor.execute('SELECT COUNT(*) FROM attendance_marking')
-            total_markings = cursor.fetchone()[0]
-            print(f"Total markings in database: {total_markings}")
-        
-        conn.close()
-        print(f"=== DATABASE OPERATION COMPLETED ===")
-        
-        message = f'Successfully saved {saved_count} attendance records'
-        if error_count > 0:
-            message += f', {error_count} errors encountered'
-        
-        return jsonify({
-            'success': True, 
-            'message': message, 
-            'saved_count': saved_count, 
-            'error_count': error_count,
-            'errors': errors
-        })
-        
-    except Exception as e:
-        import traceback
-        print(f"=== ERROR IN SAVE MONTHLY ATTENDANCE API ===")
-        print(f"Error type: {type(e)}")
-        print(f"Error message: {str(e)}")
-        print(f"Full traceback:")
-        traceback.print_exc()
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'})
-
-@app.route('/attendance_horizontal')
-@login_required
-def attendance_horizontal():
-    """Horizontal attendance view - shows employees as rows and dates as columns"""
-    from datetime import datetime, timedelta
-    
-    conn = get_db_connection()
-    
-    # Get filter parameters
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
-    company_id = request.args.get('company_id', '')
-    
-    # Set default date range if not provided (last 7 days)
-    if not from_date:
-        from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    if not to_date:
-        to_date = datetime.now().strftime('%Y-%m-%d')
-    
-    # Convert dates to datetime objects for iteration
-    start_date = datetime.strptime(from_date, '%Y-%m-%d')
-    end_date = datetime.strptime(to_date, '%Y-%m-%d')
-    
-    # Generate list of dates in range
-    date_list = []
-    current_date = start_date
-    while current_date <= end_date:
-        date_list.append(current_date.strftime('%Y-%m-%d'))
-        current_date += timedelta(days=1)
-    
-    # Get all employees (filtered by company if specified)
-    if company_id:
-        employees = conn.execute('''SELECT u.*, c.name as company_name 
-                                   FROM users u 
-                                   LEFT JOIN companies c ON u.company_id = c.id 
-                                   WHERE u.company_id = ? 
-                                   ORDER BY u.name''', (company_id,)).fetchall()
-    else:
-        employees = conn.execute('''SELECT u.*, c.name as company_name 
-                                   FROM users u 
-                                   LEFT JOIN companies c ON u.company_id = c.id 
-                                   ORDER BY u.name''').fetchall()
-    
-    # Get attendance data for the date range
-    attendance_data = {}
-    for employee in employees:
-        employee_id = employee['userid']
-        attendance_data[employee_id] = {}
-        
-        # Initialize all dates with None
-        for date in date_list:
-            attendance_data[employee_id][date] = None
-        
-        # Get actual attendance records
-        records = conn.execute('''SELECT DATE(a.timestamp) as date, a.check_in, a.check_out, a.working_hours
-                                   FROM attendance a 
-                                   WHERE a.userid = ? AND DATE(a.timestamp) >= ? AND DATE(a.timestamp) <= ?
-                                   ORDER BY a.timestamp''', (employee_id, from_date, to_date)).fetchall()
-        
-        for record in records:
-            date = record['date']
-            if date in attendance_data[employee_id]:
-                # Format the attendance data
-                check_in = record['check_in']
-                check_out = record['check_out']
-                working_hours = record['working_hours']
-                
-                if check_in and check_out:
-                    # Format times for display
-                    if ' ' in str(check_in):
-                        check_in_time = str(check_in).split(' ')[1]
-                    else:
-                        check_in_time = str(check_in)
-                        
-                    if ' ' in str(check_out):
-                        check_out_time = str(check_out).split(' ')[1]
-                    else:
-                        check_out_time = str(check_out)
-                    
-                    attendance_data[employee_id][date] = {
-                        'check_in': check_in_time,
-                        'check_out': check_out_time,
-                        'working_hours': working_hours if working_hours else 0.0
-                    }
-                else:
-                    # Single punch or incomplete record
-                    attendance_data[employee_id][date] = {
-                        'check_in': str(check_in).split(' ')[1] if check_in and ' ' in str(check_in) else str(check_in) if check_in else '-',
-                        'check_out': '-',
-                        'working_hours': 0.0
-                    }
-    
-    # Get all companies for filter dropdown
-    companies = conn.execute('SELECT * FROM companies ORDER BY name').fetchall()
-    
-    conn.close()
-    
-    return render_template('attendance_horizontal.html', 
-                         employees=employees,
-                         attendance_data=attendance_data,
-                         date_list=date_list,
-                         companies=companies,
-                         from_date=from_date,
-                         to_date=to_date,
-                         selected_company=company_id,
-                         now=datetime.now(),
-                         timedelta=timedelta,
-                         company_name=COMPANY_NAME,
-                         developer_name=DEVELOPER_NAME,
-                         admin_username=session.get('admin_username'))
-
-@app.route('/export_excel_horizontal')
-@login_required
-def export_excel_horizontal():
-    """Export horizontal attendance data to Excel"""
-    from datetime import datetime, timedelta
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-    import io
-    
-    conn = get_db_connection()
-    
-    # Get filter parameters
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
-    company_id = request.args.get('company_id', '')
-    
-    # Set default date range if not provided (last 7 days)
-    if not from_date:
-        from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    if not to_date:
-        to_date = datetime.now().strftime('%Y-%m-%d')
-    
-    # Convert dates to datetime objects for iteration
-    start_date = datetime.strptime(from_date, '%Y-%m-%d')
-    end_date = datetime.strptime(to_date, '%Y-%m-%d')
-    
-    # Generate list of dates in range
-    date_list = []
-    current_date = start_date
-    while current_date <= end_date:
-        date_list.append(current_date.strftime('%Y-%m-%d'))
-        current_date += timedelta(days=1)
-    
-    # Get all employees (filtered by company if specified)
-    if company_id:
-        employees = conn.execute('''SELECT u.*, c.name as company_name 
-                                   FROM users u 
-                                   LEFT JOIN companies c ON u.company_id = c.id 
-                                   WHERE u.company_id = ? 
-                                   ORDER BY u.name''', (company_id,)).fetchall()
-    else:
-        employees = conn.execute('''SELECT u.*, c.name as company_name 
-                                   FROM users u 
-                                   LEFT JOIN companies c ON u.company_id = c.id 
-                                   ORDER BY u.name''').fetchall()
-    
-    # Get all companies for reference
-    companies = conn.execute('SELECT * FROM companies ORDER BY name').fetchall()
-    
-    # Get attendance data for the date range
-    attendance_data = {}
-    for employee in employees:
-        try:
-            # Get employee ID - handle both dictionary and tuple formats
-            if hasattr(employee, 'keys'):
-                employee_id = employee.get('userid')
-            else:
-                employee_id = str(employee[1]) if len(employee) > 1 else 'Unknown'
-            
-            attendance_data[employee_id] = {}
-            
-            # Initialize all dates with None
-            for date in date_list:
-                attendance_data[employee_id][date] = None
-            
-            # Get actual attendance records
-            records = conn.execute('''SELECT DATE(a.timestamp) as date, a.check_in, a.check_out, a.working_hours
-                                       FROM attendance a 
-                                       WHERE a.userid = ? AND DATE(a.timestamp) >= ? AND DATE(a.timestamp) <= ?
-                                       ORDER BY a.timestamp''', (employee_id, from_date, to_date)).fetchall()
-            
-            for record in records:
-                try:
-                    # Get date from record - handle both dictionary and tuple formats
-                    if hasattr(record, 'keys'):
-                        date = record.get('date')
-                        check_in = record.get('check_in')
-                        check_out = record.get('check_out')
-                        working_hours = record.get('working_hours')
-                    else:
-                        date = str(record[0]) if len(record) > 0 else None
-                        check_in = record[1] if len(record) > 1 else None
-                        check_out = record[2] if len(record) > 2 else None
-                        working_hours = record[3] if len(record) > 3 else 0.0
-                    
-                    if date and date in attendance_data[employee_id]:
-                        # Format the attendance data
-                        if check_in and check_out:
-                            # Format times for display
-                            if ' ' in str(check_in):
-                                check_in_time = str(check_in).split(' ')[1]
-                            else:
-                                check_in_time = str(check_in)
-                                
-                            if ' ' in str(check_out):
-                                check_out_time = str(check_out).split(' ')[1]
-                            else:
-                                check_out_time = str(check_out)
-                            
-                            attendance_data[employee_id][date] = {
-                                'check_in': check_in_time,
-                                'check_out': check_out_time,
-                                'working_hours': working_hours if working_hours else 0.0
-                            }
-                        else:
-                            # Single punch or incomplete record
-                            attendance_data[employee_id][date] = {
-                                'check_in': str(check_in).split(' ')[1] if check_in and ' ' in str(check_in) else str(check_in) if check_in else '-',
-                                'check_out': '-',
-                                'working_hours': 0.0
-                            }
-                except Exception as e:
-                    print(f"Error processing attendance record for employee {employee_id}: {e}")
-                    continue
-        except Exception as e:
-            print(f"Error processing employee for attendance data: {e}")
-            continue
-    
-    conn.close()
-    
-    # Create Excel workbook
-    wb = openpyxl.Workbook()
-    
-    # Create Summary Sheet
-    summary_ws = wb.active
-    summary_ws.title = "Summary"
-    
-    # Create Attendance Sheet
-    ws = wb.create_sheet("Attendance Details")
-    
-    # Define styles
-    header_font = Font(bold=True, color="000000")
-    header_fill = PatternFill(start_color="FFC107", end_color="FFC107", fill_type="solid")
-    date_fill = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
-    border = Border(left=Side(style='thin'), right=Side(style='thin'), 
-                    top=Side(style='thin'), bottom=Side(style='thin'))
-    center_alignment = Alignment(horizontal='center', vertical='center')
-    
-    # Add title
-    ws.merge_cells('A1:' + get_column_letter(4 + len(date_list)) + '1')
-    title_cell = ws['A1']
-    title_cell.value = f"Horizontal Attendance Report - {from_date} to {to_date}"
-    title_cell.font = Font(bold=True, size=16)
-    title_cell.alignment = center_alignment
-    
-    # Add headers
-    headers = ['Employee Name', 'Emp ID', 'Company', 'Shift Type']
-    for date in date_list:
-        headers.append(f"{date.split('-')[2]}/{date.split('-')[1]}/{date.split('-')[0]}")
-    
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=3, column=col, value=header)
-        cell.font = header_font
-        cell.fill = header_fill if col <= 4 else date_fill
-        cell.border = border
-        cell.alignment = center_alignment
-    
-    # Add data rows
-    for row, employee in enumerate(employees, 4):
-        try:
-            # Employee info - ensure we're accessing the data correctly
-            if hasattr(employee, 'keys'):  # Dictionary-like object
-                emp_name = employee.get('name', 'Unknown')
-                emp_id = employee.get('userid', 'Unknown')
-                emp_company = employee.get('company_name', 'N/A')
-                emp_shift = employee.get('shift_type', 'Day')
-            else:  # Tuple or other object
-                emp_name = str(employee[0]) if len(employee) > 0 else 'Unknown'
-                emp_id = str(employee[1]) if len(employee) > 1 else 'Unknown'
-                emp_company = str(employee[2]) if len(employee) > 2 else 'N/A'
-                emp_shift = str(employee[3]) if len(employee) > 3 else 'Day'
-            
-            ws.cell(row=row, column=1, value=emp_name).border = border
-            ws.cell(row=row, column=2, value=emp_id).border = border
-            ws.cell(row=row, column=3, value=emp_company).border = border
-            ws.cell(row=row, column=4, value=emp_shift).border = border
-            
-            # Attendance data for each date
-            for col, date in enumerate(date_list, 5):
-                cell = ws.cell(row=row, column=col)
-                cell.border = border
-                cell.alignment = center_alignment
-                
-                # Get employee ID for attendance lookup
-                if hasattr(employee, 'keys'):
-                    emp_userid = employee.get('userid')
-                else:
-                    emp_userid = str(employee[1]) if len(employee) > 1 else 'Unknown'
-                
-                attendance = attendance_data.get(emp_userid, {}).get(date)
-                if attendance:
-                    if attendance.get('check_out') != '-':
-                        # Format: Check-in | Check-out | Hours
-                        cell.value = f"{attendance.get('check_in', '-')} | {attendance.get('check_out', '-')} | {attendance.get('working_hours', 0):.2f}h"
-                    else:
-                        cell.value = f"{attendance.get('check_in', '-')} | Single Punch"
-                else:
-                    cell.value = "No Record"
-        except Exception as e:
-            print(f"Error processing employee row {row}: {e}")
-            # Set default values if there's an error
-            ws.cell(row=row, column=1, value="Error").border = border
-            ws.cell(row=row, column=2, value="Error").border = border
-            ws.cell(row=row, column=3, value="Error").border = border
-            ws.cell(row=row, column=4, value="Error").border = border
-            continue
-    
-    # Auto-adjust column widths
-    for col_num in range(1, ws.max_column + 1):
-        max_length = 0
-        column_letter = get_column_letter(col_num)
-        for row_num in range(1, ws.max_row + 1):
-            cell = ws.cell(row=row_num, column=col_num)
-            try:
-                if cell.value and len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        adjusted_width = min(max_length + 2, 30)
-        ws.column_dimensions[column_letter].width = adjusted_width
-    
-    # Create Summary Sheet
-    summary_ws.merge_cells('A1:D1')
-    summary_title = summary_ws['A1']
-    summary_title.value = f"Attendance Summary Report - {from_date} to {to_date}"
-    summary_title.font = Font(bold=True, size=16)
-    summary_title.alignment = center_alignment
-    
-    # Add summary statistics
-    summary_ws['A3'] = "Total Employees:"
-    summary_ws['B3'] = len(employees)
-    summary_ws['A4'] = "Date Range:"
-    summary_ws['B4'] = f"{from_date} to {to_date}"
-    summary_ws['A5'] = "Total Days:"
-    summary_ws['B5'] = len(date_list)
-    
-    # Add company filter info
-    if company_id:
-        try:
-            company_name = next((c['name'] for c in companies if str(c['id']) == str(company_id)), 'Unknown')
-        except:
-            company_name = 'Unknown'
-        summary_ws['A6'] = "Company Filter:"
-        summary_ws['B6'] = company_name
-    
-    # Add attendance statistics
-    summary_ws['A8'] = "Attendance Statistics:"
-    summary_ws['A9'] = "Date"
-    summary_ws['B9'] = "Present"
-    summary_ws['C9'] = "Absent"
-    summary_ws['D9'] = "Single Punch"
-    
-    # Calculate daily statistics
-    for i, date in enumerate(date_list, 10):
-        summary_ws[f'A{i}'] = f"{date.split('-')[2]}/{date.split('-')[1]}/{date.split('-')[0]}"
-        
-        present_count = 0
-        absent_count = 0
-        single_punch_count = 0
-        
-        for employee in employees:
-            try:
-                # Get employee ID for attendance lookup
-                if hasattr(employee, 'keys'):
-                    emp_userid = employee.get('userid')
-                else:
-                    emp_userid = str(employee[1]) if len(employee) > 1 else 'Unknown'
-                
-                attendance = attendance_data.get(emp_userid, {}).get(date)
-                if attendance:
-                    if attendance.get('check_out') != '-':
-                        present_count += 1
-                    else:
-                        single_punch_count += 1
-                else:
-                    absent_count += 1
-            except Exception as e:
-                print(f"Error processing attendance for employee: {e}")
-                absent_count += 1
-        
-        summary_ws[f'B{i}'] = present_count
-        summary_ws[f'C{i}'] = absent_count
-        summary_ws[f'D{i}'] = single_punch_count
-    
-    # Style summary sheet
-    for row in range(3, 6):
-        summary_ws[f'A{row}'].font = Font(bold=True)
-        summary_ws[f'B{row}'].font = Font(bold=True, color="007ACC")
-    
-    summary_ws['A8'].font = Font(bold=True, size=14)
-    summary_ws['A9:D9'].font = Font(bold=True)
-    summary_ws['A9:D9'].fill = PatternFill(start_color="E6E6E6", end_color="E6E6E6", fill_type="solid")
-    
-    # Auto-adjust summary sheet widths
-    summary_ws.column_dimensions['A'].width = 20
-    summary_ws.column_dimensions['B'].width = 15
-    summary_ws.column_dimensions['C'].width = 15
-    summary_ws.column_dimensions['D'].width = 15
-    
-    # Create Instructions Sheet
-    instructions_ws = wb.create_sheet("Instructions & Legend")
-    
-    # Add instructions
-    instructions_ws['A1'] = "How to Read This Report"
-    instructions_ws['A1'].font = Font(bold=True, size=16)
-    instructions_ws['A1'].alignment = center_alignment
-    instructions_ws.merge_cells('A1:D1')
-    
-    instructions_ws['A3'] = "Report Structure:"
-    instructions_ws['A3'].font = Font(bold=True, size=14)
-    
-    instructions_ws['A4'] = "• Summary Sheet: Overview and daily statistics"
-    instructions_ws['A5'] = "• Attendance Details: Complete attendance data by employee and date"
-    instructions_ws['A6'] = "• Instructions & Legend: This sheet with explanations"
-    
-    instructions_ws['A8'] = "Data Format:"
-    instructions_ws['A8'].font = Font(bold=True, size=14)
-    
-    instructions_ws['A9'] = "• Complete Record: Check-in | Check-out | Working Hours"
-    instructions_ws['A10'] = "• Single Punch: Check-in | Single Punch (incomplete record)"
-    instructions_ws['A11'] = "• No Record: Employee was not present on this date"
-    
-    instructions_ws['A13'] = "Color Coding:"
-    instructions_ws['A13'].font = Font(bold=True, size=14)
-    
-    instructions_ws['A14'] = "• Yellow Headers: Employee information columns"
-    instructions_ws['A15'] = "• Orange Headers: Date columns"
-    instructions_ws['A16'] = "• White Background: Data cells"
-    
-    instructions_ws['A18'] = "Example:"
-    instructions_ws['A18'].font = Font(bold=True, size=14)
-    
-    instructions_ws['A19'] = "09:14:15 | 17:57:29 | 8.72h"
-    instructions_ws['A19'].font = Font(color="007ACC")
-    instructions_ws['B19'] = "= Check-in at 9:14 AM, Check-out at 5:57 PM, Worked 8.72 hours"
-    
-    instructions_ws['A20'] = "18:26:59 | Single Punch"
-    instructions_ws['A20'].font = Font(color="FF6B35")
-    instructions_ws['B20'] = "= Checked in at 6:26 PM, no check-out recorded"
-    
-    instructions_ws['A21'] = "No Record"
-    instructions_ws['A21'].font = Font(color="999999")
-    instructions_ws['B21'] = "= Employee was not present on this date"
-    
-    # Style instructions sheet
-    instructions_ws.column_dimensions['A'].width = 25
-    instructions_ws.column_dimensions['B'].width = 60
-    
-    # Save to bytes
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    
-    # Create response
-    filename = f"horizontal_attendance_{from_date}_to_{to_date}.xlsx"
-    
-    return send_file(
-        io.BytesIO(output.getvalue()),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=filename
-    )
-
-@app.route('/export_pdf_horizontal')
-@login_required
-def export_pdf_horizontal():
-    """Export horizontal attendance data to PDF"""
-    from datetime import datetime, timedelta
-    from reportlab.lib.pagesizes import landscape, A4
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib import colors
-    from reportlab.lib.units import inch
-    import io
-    
-    conn = get_db_connection()
-    
-    # Get filter parameters
-    from_date = request.args.get('from_date', '')
-    to_date = request.args.get('to_date', '')
-    company_id = request.args.get('company_id', '')
-    
-    # Set default date range if not provided (last 7 days)
-    if not from_date:
-        from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
-    if not to_date:
-        to_date = datetime.now().strftime('%Y-%m-%d')
-    
-    # Convert dates to datetime objects for iteration
-    start_date = datetime.strptime(from_date, '%Y-%m-%d')
-    end_date = datetime.strptime(to_date, '%Y-%m-%d')
-    
-    # Generate list of dates in range
-    date_list = []
-    current_date = start_date
-    while current_date <= end_date:
-        date_list.append(current_date.strftime('%Y-%m-%d'))
-        current_date += timedelta(days=1)
-    
-    # Get all employees (filtered by company if specified)
-    if company_id:
-        employees = conn.execute('''SELECT u.*, c.name as company_name 
-                                   FROM users u 
-                                   LEFT JOIN companies c ON u.company_id = c.id 
-                                   WHERE u.company_id = ? 
-                                   ORDER BY u.name''', (company_id,)).fetchall()
-    else:
-        employees = conn.execute('''SELECT u.*, c.name as company_name 
-                                   FROM users u 
-                                   LEFT JOIN companies c ON u.company_id = c.id 
-                                   ORDER BY u.name''').fetchall()
-    
-    # Get attendance data for the date range
-    attendance_data = {}
-    for employee in employees:
-        employee_id = employee['userid']
-        attendance_data[employee_id] = {}
-        
-        # Initialize all dates with None
-        for date in date_list:
-            attendance_data[employee_id][date] = None
-        
-        # Get actual attendance records
-        records = conn.execute('''SELECT DATE(a.timestamp) as date, a.check_in, a.check_out, a.working_hours
-                                   FROM attendance a 
-                                   WHERE a.userid = ? AND DATE(a.timestamp) >= ? AND DATE(a.timestamp) <= ?
-                                   ORDER BY a.timestamp''', (employee_id, from_date, to_date)).fetchall()
-        
-        for record in records:
-            date = record['date']
-            if date in attendance_data[employee_id]:
-                # Format the attendance data
-                check_in = record['check_in']
-                check_out = record['check_out']
-                working_hours = record['working_hours']
-                
-                if check_in and check_out:
-                    # Format times for display
-                    if ' ' in str(check_in):
-                        check_in_time = str(check_in).split(' ')[1]
-                    else:
-                        check_in_time = str(check_in)
-                        
-                    if ' ' in str(check_out):
-                        check_out_time = str(check_out).split(' ')[1]
-                    else:
-                        check_out_time = str(check_out)
-                    
-                    attendance_data[employee_id][date] = {
-                        'check_in': check_in_time,
-                        'check_out': check_out_time,
-                        'working_hours': working_hours if working_hours else 0.0
-                    }
-                else:
-                    # Single punch or incomplete record
-                    attendance_data[employee_id][date] = {
-                        'check_in': str(check_in).split(' ')[1] if check_in and ' ' in str(check_in) else str(check_in) if check_in else '-',
-                        'check_out': '-',
-                        'working_hours': 0.0
-                    }
-    
-    conn.close()
-    
-    # Create PDF
-    output = io.BytesIO()
-    doc = SimpleDocTemplate(output, pagesize=landscape(A4))
-    
-    # Styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=16,
-        spaceAfter=20,
-        alignment=1  # Center alignment
-    )
-    
-    # Content
-    story = []
-    
-    # Title
-    title = Paragraph(f"Horizontal Attendance Report<br/>From: {from_date} To: {to_date}", title_style)
-    story.append(title)
-    story.append(Spacer(1, 20))
-    
-    # Add summary information
-    summary_style = ParagraphStyle(
-        'Summary',
-        parent=styles['Normal'],
-        fontSize=10,
-        spaceAfter=10
-    )
-    
-    story.append(Paragraph(f"<b>Summary:</b> {len(employees)} employees, {len(date_list)} days", summary_style))
-    if company_id:
-        try:
-            # Get company name - handle both dictionary and tuple formats
-            company_name = 'Unknown'
-            for c in companies:
-                if hasattr(c, 'keys'):
-                    if str(c.get('id')) == str(company_id):
-                        company_name = c.get('name', 'Unknown')
-                        break
-                else:
-                    if len(c) > 1 and str(c[0]) == str(company_id):
-                        company_name = str(c[1]) if len(c) > 1 else 'Unknown'
-                        break
-        except:
-            company_name = 'Unknown'
-        story.append(Paragraph(f"<b>Company:</b> {company_name}", summary_style))
-    story.append(Spacer(1, 20))
-    
-    # Prepare table data
-    table_data = []
-    
-    # Headers
-    headers = ['Employee Name', 'Emp ID', 'Company', 'Shift Type']
-    for date in date_list:
-        headers.append(f"{date.split('-')[2]}/{date.split('-')[1]}/{date.split('-')[0]}")
-    table_data.append(headers)
-    
-    # Data rows
-    for employee in employees:
-        try:
-            # Get employee info - ensure we're accessing the data correctly
-            if hasattr(employee, 'keys'):  # Dictionary-like object
-                emp_name = employee.get('name', 'Unknown')
-                emp_id = str(employee.get('userid', 'Unknown'))
-                emp_company = employee.get('company_name', 'N/A')
-                emp_shift = employee.get('shift_type', 'Day')
-            else:  # Tuple or other object
-                emp_name = str(employee[0]) if len(employee) > 0 else 'Unknown'
-                emp_id = str(employee[1]) if len(employee) > 1 else 'Unknown'
-                emp_company = str(employee[2]) if len(employee) > 2 else 'N/A'
-                emp_shift = str(employee[3]) if len(employee) > 3 else 'Day'
-            
-            row = [emp_name, emp_id, emp_company, emp_shift]
-            
-            # Attendance data for each date
-            for date in date_list:
-                # Get employee ID for attendance lookup
-                if hasattr(employee, 'keys'):
-                    emp_userid = employee.get('userid')
-                else:
-                    emp_userid = str(employee[1]) if len(employee) > 1 else 'Unknown'
-                
-                attendance = attendance_data.get(emp_userid, {}).get(date)
-                if attendance:
-                    if attendance.get('check_out') != '-':
-                        cell_text = f"{attendance.get('check_in', '-')} | {attendance.get('check_out', '-')} | {attendance.get('working_hours', 0):.2f}h"
-                    else:
-                        cell_text = f"{attendance.get('check_in', '-')} | Single Punch"
-                else:
-                    cell_text = "No Record"
-                
-                row.append(Paragraph(cell_text, styles['Normal']))
-            
-            table_data.append(row)
-        except Exception as e:
-            print(f"Error processing employee for PDF: {e}")
-            # Add error row
-            error_row = ['Error', 'Error', 'Error', 'Error']
-            for date in date_list:
-                error_row.append(Paragraph('Error', styles['Normal']))
-            table_data.append(error_row)
-    
-    # Create table
-    table = Table(table_data)
-    
-    # Table style
-    table_style = TableStyle([
-        ('BACKGROUND', (0, 0), (3, 0), colors.yellow),  # Employee info headers
-        ('BACKGROUND', (4, 0), (-1, 0), colors.orange),  # Date headers
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-    ])
-    
-    table.setStyle(table_style)
-    story.append(table)
-    
-    # Build PDF
-    doc.build(story)
-    output.seek(0)
-    
-    # Create response
-    filename = f"horizontal_attendance_{from_date}_to_{to_date}.pdf"
-    
-    return send_file(
-        io.BytesIO(output.getvalue()),
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=filename
-    )
 
 if __name__ == '__main__':
     # Initialize database

@@ -1,0 +1,643 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Dashboard - {{ COMPANY_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-chart-line me-2"></i>Analytics Dashboard</h2>
+        <p class="text-muted">Comprehensive insights into attendance patterns and performance metrics</p>
+    </div>
+</div>
+
+<!-- Quick Stats Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="totalEmployees">-</h4>
+                        <p class="card-text">Total Employees</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="presentToday">-</h4>
+                        <p class="card-text">Present Today</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-check-circle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="lateToday">-</h4>
+                        <p class="card-text">Late Today</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 class="card-title" id="avgWorkingHours">-</h4>
+                        <p class="card-text">Avg Working Hours</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-hourglass-half fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <label class="form-label">Company</label>
+                <select class="form-select" id="companyFilter">
+                    <option value="">All Companies</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">From Date</label>
+                <input type="date" class="form-control" id="fromDateFilter" 
+                       value="{{ (now - timedelta(days=30)).strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">To Date</label>
+                <input type="date" class="form-control" id="toDateFilter" 
+                       value="{{ now.strftime('%Y-%m-%d') }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Shift Type</label>
+                <select class="form-select" id="shiftFilter">
+                    <option value="">All Shifts</option>
+                    <option value="day">Day Shift</option>
+                    <option value="night">Night Shift</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-grid">
+                    <button class="btn btn-primary" onclick="refreshAnalytics()">
+                        <i class="fas fa-sync-alt me-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 1 -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Daily Attendance Trend</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="attendanceTrendChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Company Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="companyDistributionChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Row 2 -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Working Hours Analysis</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="workingHoursChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-area me-2"></i>Overtime Trends</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="overtimeChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Performance Table -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-table me-2"></i>Employee Performance Summary</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped" id="performanceTable">
+                <thead>
+                    <tr>
+                        <th>Employee</th>
+                        <th>Company</th>
+                        <th>Attendance Rate</th>
+                        <th>Avg Working Hours</th>
+                        <th>Overtime Hours</th>
+                        <th>Late Arrivals</th>
+                        <th>Performance Score</th>
+                    </tr>
+                </thead>
+                <tbody id="performanceTableBody">
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">
+                            Loading performance data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Export Section -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="fas fa-download me-2"></i>Export Reports</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3">
+                <button class="btn btn-success w-100" onclick="exportAnalyticsExcel()">
+                    <i class="fas fa-file-excel me-2"></i>Export to Excel
+                </button>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-danger w-100" onclick="exportAnalyticsPDF()">
+                    <i class="fas fa-file-pdf me-2"></i>Export to PDF
+                </button>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-info w-100" onclick="exportPerformanceReport()">
+                    <i class="fas fa-chart-bar me-2"></i>Performance Report
+                </button>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-warning w-100" onclick="exportAttendanceSummary()">
+                    <i class="fas fa-calendar me-2"></i>Attendance Summary
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// Global chart objects
+let attendanceTrendChart, companyDistributionChart, workingHoursChart, overtimeChart;
+
+// Initialize analytics when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    loadCompanyFilter();
+    refreshAnalytics();
+});
+
+function loadCompanyFilter() {
+    fetch('/api/analytics/companies')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const companyFilter = document.getElementById('companyFilter');
+            companyFilter.innerHTML = '<option value="">All Companies</option>';
+            
+            data.companies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.company_name;
+                option.textContent = company.company_name;
+                companyFilter.appendChild(option);
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error loading companies:', error);
+    });
+}
+
+function refreshAnalytics() {
+    const company = document.getElementById('companyFilter').value;
+    const fromDate = document.getElementById('fromDateFilter').value;
+    const toDate = document.getElementById('toDateFilter').value;
+    const shift = document.getElementById('shiftFilter').value;
+    
+    // Validate date range
+    if (!fromDate || !toDate) {
+        showAlert('Please select both from and to dates', 'warning');
+        return;
+    }
+    
+    if (fromDate > toDate) {
+        showAlert('From date cannot be after to date', 'warning');
+        return;
+    }
+    
+    // Show loading state
+    showAlert('Loading analytics data...', 'info');
+    
+    // Load quick stats
+    loadQuickStats(company, fromDate, toDate, shift);
+    
+    // Load charts
+    loadAttendanceTrendChart(company, fromDate, toDate, shift);
+    loadCompanyDistributionChart();
+    loadWorkingHoursChart(company, fromDate, toDate, shift);
+    loadOvertimeChart(company, fromDate, toDate, shift);
+    
+    // Load performance table
+    loadPerformanceTable(company, fromDate, toDate, shift);
+}
+
+function loadQuickStats(company, fromDate, toDate, shift) {
+    fetch('/api/analytics/quick-stats', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company, fromDate, toDate, shift })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('totalEmployees').textContent = data.stats.totalEmployees;
+            document.getElementById('presentToday').textContent = data.stats.presentToday;
+            document.getElementById('lateToday').textContent = data.stats.lateToday;
+            document.getElementById('avgWorkingHours').textContent = data.stats.avgWorkingHours.toFixed(1) + 'h';
+        }
+    })
+    .catch(error => {
+        console.error('Error loading quick stats:', error);
+    });
+}
+
+function loadAttendanceTrendChart(company, fromDate, toDate, shift) {
+    fetch('/api/analytics/attendance-trend', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company, fromDate, toDate, shift })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            createAttendanceTrendChart(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading attendance trend:', error);
+    });
+}
+
+function createAttendanceTrendChart(data) {
+    const ctx = document.getElementById('attendanceTrendChart').getContext('2d');
+    
+    if (attendanceTrendChart) {
+        attendanceTrendChart.destroy();
+    }
+    
+    attendanceTrendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Present',
+                data: data.present,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                tension: 0.1
+            }, {
+                label: 'Absent',
+                data: data.absent,
+                borderColor: 'rgb(255, 99, 132)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function loadCompanyDistributionChart() {
+    fetch('/api/analytics/company-distribution')
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            createCompanyDistributionChart(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading company distribution:', error);
+    });
+}
+
+function createCompanyDistributionChart(data) {
+    const ctx = document.getElementById('companyDistributionChart').getContext('2d');
+    
+    if (companyDistributionChart) {
+        companyDistributionChart.destroy();
+    }
+    
+    companyDistributionChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                data: data.values,
+                backgroundColor: [
+                    '#FF6384',
+                    '#36A2EB',
+                    '#FFCE56',
+                    '#4BC0C0',
+                    '#9966FF',
+                    '#FF9F40'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+
+function loadWorkingHoursChart(company, fromDate, toDate, shift) {
+    fetch('/api/analytics/working-hours', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company, fromDate, toDate, shift })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            createWorkingHoursChart(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading working hours:', error);
+    });
+}
+
+function createWorkingHoursChart(data) {
+    const ctx = document.getElementById('workingHoursChart').getContext('2d');
+    
+    if (workingHoursChart) {
+        workingHoursChart.destroy();
+    }
+    
+    workingHoursChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Average Working Hours',
+                data: data.values,
+                backgroundColor: 'rgba(54, 162, 235, 0.8)',
+                borderColor: 'rgb(54, 162, 235)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 12
+                }
+            }
+        }
+    });
+}
+
+function loadOvertimeChart(company, fromDate, toDate, shift) {
+    fetch('/api/analytics/overtime-trend', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company, fromDate, toDate, shift })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            createOvertimeChart(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading overtime trend:', error);
+    });
+}
+
+function createOvertimeChart(data) {
+    const ctx = document.getElementById('overtimeChart').getContext('2d');
+    
+    if (overtimeChart) {
+        overtimeChart.destroy();
+    }
+    
+    overtimeChart = new Chart(ctx, {
+        type: 'area',
+        data: {
+            labels: data.labels,
+            datasets: [{
+                label: 'Overtime Hours',
+                data: data.values,
+                backgroundColor: 'rgba(255, 206, 86, 0.3)',
+                borderColor: 'rgb(255, 206, 86)',
+                borderWidth: 2,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function loadPerformanceTable(company, fromDate, toDate, shift) {
+    fetch('/api/analytics/performance-table', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company, fromDate, toDate, shift })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            populatePerformanceTable(data.data);
+        }
+    })
+    .catch(error => {
+        console.error('Error loading performance table:', error);
+    });
+}
+
+function populatePerformanceTable(data) {
+    const tbody = document.getElementById('performanceTableBody');
+    tbody.innerHTML = '';
+    
+    if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No data available</td></tr>';
+        return;
+    }
+    
+    data.forEach(employee => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${employee.name}</td>
+            <td>${employee.company_name}</td>
+            <td>
+                <div class="progress" style="height: 20px;">
+                    <div class="progress-bar ${getProgressBarColor(employee.attendanceRate)}" 
+                         style="width: ${employee.attendanceRate}%">
+                        ${employee.attendanceRate.toFixed(1)}%
+                    </div>
+                </div>
+            </td>
+            <td>${employee.avgWorkingHours.toFixed(1)}h</td>
+            <td>${employee.overtimeHours.toFixed(1)}h</td>
+            <td>${employee.lateArrivals}</td>
+            <td>
+                <span class="badge ${getPerformanceBadgeColor(employee.performanceScore)}">
+                    ${employee.performanceScore.toFixed(1)}/10
+                </span>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function getProgressBarColor(percentage) {
+    if (percentage >= 90) return 'bg-success';
+    if (percentage >= 75) return 'bg-warning';
+    return 'bg-danger';
+}
+
+function getPerformanceBadgeColor(score) {
+    if (score >= 8) return 'bg-success';
+    if (score >= 6) return 'bg-warning';
+    return 'bg-danger';
+}
+
+// Export functions
+function exportAnalyticsExcel() {
+    const company = document.getElementById('companyFilter').value;
+    const fromDate = document.getElementById('fromDateFilter').value;
+    const toDate = document.getElementById('toDateFilter').value;
+    const shift = document.getElementById('shiftFilter').value;
+    
+    // Validate date range
+    if (!fromDate || !toDate) {
+        showAlert('Please select both from and to dates', 'warning');
+        return;
+    }
+    
+    if (fromDate > toDate) {
+        showAlert('From date cannot be after to date', 'warning');
+        return;
+    }
+    
+    fetch('/api/analytics/export-excel', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ company, fromDate, toDate, shift })
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `analytics_report_${new Date().toISOString().split('T')[0]}.xlsx`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+        showAlert('Analytics report exported successfully!', 'success');
+    })
+    .catch(error => {
+        showAlert('Error exporting report: ' + error.message, 'danger');
+    });
+}
+
+function exportAnalyticsPDF() {
+    showAlert('PDF export feature coming soon!', 'info');
+}
+
+function exportPerformanceReport() {
+    showAlert('Performance report export coming soon!', 'info');
+}
+
+function exportAttendanceSummary() {
+    showAlert('Attendance summary export coming soon!', 'info');
+}
+</script>
+{% endblock %}

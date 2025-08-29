@@ -1,0 +1,26 @@
+ATTENDANCE SYSTEM - CLOUD DEPLOYMENT 
+ 
+Files included: 
+- web_app.py: Main application 
+- app.py: Production entry point 
+- passenger_wsgi.py: cPanel WSGI file 
+- requirements.txt: Python dependencies 
+- templates/: HTML templates 
+- attendance.db: Database file 
+- .htaccess: Server configuration 
+ 
+Deployment steps: 
+1. Upload all files to cPanel 
+2. Set Python version to 3.9 or 3.10 
+3. Set entry point to passenger_wsgi.py 
+4. Install dependencies: pip install -r requirements.txt 
+5. Set environment variables in cPanel 
+6. Restart application 
+ 
+Environment variables needed: 
+- SECRET_KEY 
+- MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS 
+- MAIL_USERNAME, MAIL_PASSWORD 
+- DEVICE_IP, DEVICE_PORT 
+ 
+Access URL: yourdomain.com/attendance-system 

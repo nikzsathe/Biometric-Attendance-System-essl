@@ -1,0 +1,752 @@
+{% extends "base.html" %}
+
+{% block title %}Device Management - Attendance System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-5">
+            <i class="fas fa-server me-3"></i>Device Management
+        </h1>
+        <p class="lead text-muted">Connect to biometric devices and manage data synchronization</p>
+    </div>
+</div>
+
+<!-- Quick Sync Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-sync-alt me-2"></i>Quick Data Sync
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <h6>Default Device: 192.168.1.201:4370</h6>
+                        <p class="text-muted mb-0">
+                            <strong>Pull Latest Data:</strong> Syncs both users and attendance (overwrites attendance data)<br>
+                            <strong>Sync Users Only:</strong> Updates user names only (preserves your custom shift times, hourly rates, etc.)
+                        </p>
+                    </div>
+                                    <div class="col-md-6 text-end">
+                    <button class="btn btn-success btn-lg me-2" onclick="quickSync(event)">
+                        <i class="fas fa-sync-alt me-2"></i>Pull Latest Data
+                    </button>
+                    <button class="btn btn-info btn-lg me-2" onclick="syncUsersOnly(event)">
+                        <i class="fas fa-users me-2"></i>Sync Users Only
+                    </button>
+                    <button class="btn btn-warning btn-lg" onclick="pushDataToDevice(event)">
+                        <i class="fas fa-upload me-2"></i>Push to Device
+                    </button>
+                </div>
+                </div>
+                
+                <!-- Quick Sync Status -->
+                <div id="quickSyncStatus" class="mt-3" style="display: none;">
+                    <!-- Status will be shown here -->
+                </div>
+                
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Device Connection -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-plug me-2"></i>Device Connection
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="deviceForm" class="row g-3">
+                    <div class="col-md-4">
+                        <label for="deviceIP" class="form-label">Device IP Address</label>
+                        <input type="text" class="form-control" id="deviceIP" 
+                               placeholder="192.168.1.201" value="192.168.1.201" required>
+                        <div class="form-text">Enter the IP address of your biometric device</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="devicePort" class="form-label">Device Port</label>
+                        <input type="number" class="form-control" id="devicePort" 
+                               value="4370" min="1" max="65535" required>
+                        <div class="form-text">Default port is 4370 for most devices</div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary me-2" onclick="testConnection(event)">
+                            <i class="fas fa-wifi me-2"></i>Test Connection
+                        </button>
+                        <button type="button" class="btn btn-success" onclick="pullData(event)">
+                            <i class="fas fa-download me-2"></i>Pull Data
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Connection Status -->
+                <div id="connectionStatus" class="mt-3" style="display: none;">
+                    <!-- Status will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Push to Device Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-upload me-2"></i>Push Data to Device
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h6>Update Device with System Changes</h6>
+                        <p class="text-muted mb-0">
+                            <strong>Push All Users:</strong> Updates all user names on the device with your latest edits<br>
+                            <strong>Push Single User:</strong> Update a specific user's information on the device
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <button class="btn btn-primary btn-lg me-2" onclick="pushAllUsersToDevice()">
+                            <i class="fas fa-upload me-2"></i>Push All Users
+                        </button>
+                        <button class="btn btn-outline-primary btn-lg" onclick="showPushUserModal()">
+                            <i class="fas fa-user-edit me-2"></i>Push Single User
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Push to Device Status -->
+                <div id="pushToDeviceStatus" class="mt-3" style="display: none;">
+                    <!-- Status will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- Network Discovery -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-search me-2"></i>Network Discovery
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="networkPrefix" class="form-label">Network Prefix</label>
+                        <input type="text" class="form-control" id="networkPrefix" 
+                               placeholder="192.168.1" value="192.168.1">
+                        <div class="form-text">e.g., 192.168.1 for 192.168.1.x network</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="startIP" class="form-label">Start IP</label>
+                        <input type="number" class="form-control" id="startIP" value="1" min="1" max="254">
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <button type="button" class="btn btn-info" onclick="discoverDevices(event)">
+                            <i class="fas fa-search me-2"></i>Scan Network
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Discovery Results -->
+                <div id="discoveryResults" class="mt-3" style="display: none;">
+                    <!-- Results will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Management -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-database me-2"></i>Data Management
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-users fa-3x text-primary mb-3"></i>
+                                <h5>Users</h5>
+                                <p class="text-muted">Manage user data from biometric devices</p>
+                                <button class="btn btn-outline-primary" onclick="pullUsersOnly(event)">
+                                    <i class="fas fa-download me-2"></i>Pull Users Only
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-calendar-check fa-3x text-success mb-3"></i>
+                                <h5>Attendance</h5>
+                                <p class="text-muted">Sync attendance records from devices</p>
+                                <button class="btn btn-outline-success" onclick="pullAttendanceOnly(event)">
+                                    <i class="fas fa-download me-2"></i>Pull Attendance Only
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Information -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>System Information
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Supported Devices</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>ESSL K90 and similar models</li>
+                            <li><i class="fas fa-check text-success me-2"></i>ZKTeco devices</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Any ZK protocol compatible device</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Connection Requirements</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-check text-success me-2"></i>Device must be on same network</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Correct IP address and port</li>
+                            <li><i class="fas fa-check text-success me-2"></i>Device powered on and accessible</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Push Single User Modal -->
+<div class="modal fade" id="pushUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-upload me-2"></i>Push User to Device
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="pushUserSelect" class="form-label">Select User to Push</label>
+                    <select class="form-select" id="pushUserSelect" required>
+                        <option value="">Choose a user...</option>
+                        <!-- Users will be loaded here -->
+                    </select>
+                </div>
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    This will update the user's name on the biometric device to match your latest edits.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="pushSingleUserToDevice()">
+                    <i class="fas fa-upload me-2"></i>Push to Device
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentDeviceIP = '';
+let currentDevicePort = 4370;
+
+function quickSync(event) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
+    button.disabled = true;
+    
+    // Show status
+    const statusDiv = document.getElementById('quickSyncStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Pulling latest data from default device (192.168.1.201:4370)...
+        </div>
+    `;
+    
+    // Pull latest data
+    fetch('/api/pull_latest_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>${data.message}
+                    <div class="mt-2">
+                        <a href="/" class="btn btn-sm btn-success me-2">
+                            <i class="fas fa-tachometer-alt me-1"></i>View Dashboard
+                        </a>
+                        <a href="/users" class="btn btn-sm btn-primary me-2">
+                            <i class="fas fa-users me-1"></i>View Users
+                        </a>
+                        <a href="/attendance" class="btn btn-sm btn-info">
+                            <i class="fas fa-calendar-check me-1"></i>View Attendance
+                        </a>
+                    </div>
+                </div>
+            `;
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle me-2"></i>${data.message}
+                </div>
+            `;
+        }
+        
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error syncing data: ${error.message}
+            </div>
+        `;
+        
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function testConnection(event) {
+    const ip = document.getElementById('deviceIP').value.trim();
+    const port = parseInt(document.getElementById('devicePort').value);
+    
+    if (!ip) {
+        showAlert('Please enter a device IP address', 'warning');
+        return;
+    }
+    
+    currentDeviceIP = ip;
+    currentDevicePort = port;
+    
+    // Show loading state
+    const statusDiv = document.getElementById('connectionStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Testing connection to ${ip}:${port}...
+        </div>
+    `;
+    
+    // Test connection
+    fetch('/api/test_connection', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ip: ip, port: port })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>${data.message}
+                </div>
+            `;
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle me-2"></i>${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error testing connection: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function pullData(event) {
+    const ip = document.getElementById('deviceIP').value.trim();
+    const port = parseInt(document.getElementById('devicePort').value);
+    
+    if (!ip) {
+        showAlert('Please enter a device IP address', 'warning');
+        return;
+    }
+    
+    currentDeviceIP = ip;
+    currentDevicePort = port;
+    
+    // Show loading state
+    const statusDiv = document.getElementById('connectionStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Pulling data from ${ip}:${port}...
+        </div>
+    `;
+    
+    // Pull data
+    fetch('/api/pull_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ip: ip, port: port })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>${data.message}
+                    <div class="mt-2">
+                        <a href="/" class="btn btn-sm btn-success me-2">
+                            <i class="fas fa-tachometer-alt me-1"></i>View Dashboard
+                        </a>
+                        <a href="/users" class="btn btn-sm btn-primary me-2">
+                            <i class="fas fa-users me-1"></i>View Users
+                        </a>
+                        <a href="/attendance" class="btn btn-sm btn-info">
+                            <i class="fas fa-calendar-check me-1"></i>View Attendance
+                        </a>
+                    </div>
+                </div>
+            `;
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-times-circle me-2"></i>${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error pulling data: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function discoverDevices(event) {
+    const network = document.getElementById('networkPrefix').value.trim();
+    const startIP = parseInt(document.getElementById('startIP').value);
+    
+    if (!network) {
+        showAlert('Please enter a network prefix', 'warning');
+        return;
+    }
+    
+    // Show loading state
+    const resultsDiv = document.getElementById('discoveryResults');
+    resultsDiv.style.display = 'block';
+    resultsDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Scanning network ${network}.${startIP} to ${network}.254...
+        </div>
+    `;
+    
+    // Simulate network discovery (you can implement actual discovery here)
+    setTimeout(() => {
+        // For demo purposes, show some sample results
+        resultsDiv.innerHTML = `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle me-2"></i>Network scan completed!
+                <div class="mt-2">
+                    <h6>Found Devices:</h6>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-server me-2"></i>${network}.201:4370 (ESSL K90)</li>
+                        <li><i class="fas fa-server me-2"></i>${network}.100:4370 (ZKTeco)</li>
+                    </ul>
+                    <small class="text-muted">Note: This is a demo. Actual discovery requires network scanning implementation.</small>
+                </div>
+            </div>
+        `;
+    }, 2000);
+}
+
+function syncUsersOnly(event) {
+    event.preventDefault();
+    
+    // Show loading state
+    const statusDiv = document.getElementById('quickSyncStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Syncing users only from device...
+        </div>
+    `;
+    
+    // Call the API to sync only users
+    fetch('/api/sync_users_only', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'device_ip=192.168.1.201&device_port=4370'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>${data.message}
+                </div>
+            `;
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function pullUsersOnly(event) {
+    if (!currentDeviceIP) {
+        showAlert('Please test connection first', 'warning');
+        return;
+    }
+    
+    // This would call a specific API endpoint for users only
+    showAlert('Pulling users only...', 'info');
+    // Implement specific user pull logic
+}
+
+
+
+// Push to Device Functions
+function pushDataToDevice(event) {
+    // This function is called from the quick sync section
+    pushAllUsersToDevice();
+}
+
+function pushAllUsersToDevice() {
+    const statusDiv = document.getElementById('pushToDeviceStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Pushing all users to device...
+        </div>
+    `;
+    
+    // Call the API to push all users to device
+    fetch('/api/push_data_to_device', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            device_ip: '192.168.1.201',
+            device_port: 4370
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>${data.message}
+                </div>
+            `;
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function showPushUserModal() {
+    // Load users into the select dropdown
+    fetch('/api/users')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const select = document.getElementById('pushUserSelect');
+                select.innerHTML = '<option value="">Choose a user...</option>';
+                
+                data.users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.userid;
+                    option.textContent = `${user.userid} - ${user.name} (${user.company_name})`;
+                    select.appendChild(option);
+                });
+                
+                // Show the modal
+                const modal = new bootstrap.Modal(document.getElementById('pushUserModal'));
+                modal.show();
+            } else {
+                showAlert('Error loading users', 'danger');
+            }
+        })
+        .catch(error => {
+            showAlert('Error loading users: ' + error.message, 'danger');
+        });
+}
+
+function pushSingleUserToDevice() {
+    const userId = document.getElementById('pushUserSelect').value;
+    
+    if (!userId) {
+        showAlert('Please select a user', 'warning');
+        return;
+    }
+    
+    const statusDiv = document.getElementById('pushToDeviceStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-info">
+            <i class="fas fa-spinner fa-spin me-2"></i>Pushing user to device...
+        </div>
+    `;
+    
+    // Call the API to push single user to device
+    fetch('/api/push_user_to_device', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            user_id: userId,
+            device_ip: '192.168.1.201',
+            device_port: 4370
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle me-2"></i>${data.message}
+                </div>
+            `;
+            
+            // Close the modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('pushUserModal'));
+            modal.hide();
+        } else {
+            statusDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>${data.message}
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        statusDiv.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error: ${error.message}
+            </div>
+        `;
+    });
+}
+
+function pullAttendanceOnly(event) {
+    if (!currentDeviceIP) {
+        showAlert('Please test connection first', 'warning');
+        return;
+    }
+    
+    // This would call a specific API endpoint for attendance only
+    showAlert('Pulling attendance only...', 'info');
+    // Implement specific attendance pull logic
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Find the first row element or fallback to container
+    const firstRow = document.querySelector('.row');
+    const container = document.querySelector('.container');
+    
+    if (firstRow && firstRow.parentNode === container) {
+        container.insertBefore(alertDiv, firstRow);
+    } else {
+        // Fallback: insert at the beginning of container
+        container.insertBefore(alertDiv, container.firstChild);
+    }
+    
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Auto-fill current date for network discovery
+document.addEventListener('DOMContentLoaded', function() {
+    // Set default values
+    document.getElementById('deviceIP').value = '192.168.1.201';
+    document.getElementById('devicePort').value = '4370';
+    document.getElementById('networkPrefix').value = '192.168.1';
+    document.getElementById('startIP').value = '1';
+});
+</script>
+{% endblock %}

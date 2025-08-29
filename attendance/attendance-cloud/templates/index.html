@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Attendance System{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 text-center mb-4">
+            <i class="fas fa-tachometer-alt me-3"></i>Dashboard
+        </h1>
+        <p class="lead text-center text-muted">Welcome to your Attendance Management System</p>
+    </div>
+</div>
+
+<!-- Device Status Alert -->
+{% if device_status %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-success d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-check-circle me-2"></i>
+                <strong>Device Connected:</strong> {{ device_ip }}:{{ device_port }} is reachable
+            </div>
+            <button class="btn btn-success btn-sm" onclick="pullLatestData(event)">
+                <i class="fas fa-sync-alt me-2"></i>Pull Latest Data
+            </button>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-warning d-flex justify-content-between align-items-center">
+            <div>
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Device Status:</strong> {{ device_ip }}:{{ device_port }} is not reachable
+            </div>
+            <a href="/device" class="btn btn-warning btn-sm">
+                <i class="fas fa-cog me-2"></i>Manage Device
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Statistics Cards -->
+<div class="row mb-5">
+    <div class="col-md-4 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-users fa-3x mb-3 opacity-75"></i>
+                <div class="stats-number">{{ total_users }}</div>
+                <div class="stats-label">Total Users</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-calendar-check fa-3x mb-3 opacity-75"></i>
+                <div class="stats-number">{{ total_attendance }}</div>
+                <div class="stats-label">Total Attendance Records</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card stats-card h-100">
+            <div class="card-body text-center">
+                <i class="fas fa-clock fa-3x mb-3 opacity-75"></i>
+                <div class="stats-number">{{ today_attendance }}</div>
+                <div class="stats-label">Today's Attendance</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-5">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="/users" class="btn btn-primary w-100">
+                            <i class="fas fa-users me-2"></i>View All Users
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/attendance" class="btn btn-success w-100">
+                            <i class="fas fa-calendar-check me-2"></i>View Attendance
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="/device" class="btn btn-warning w-100">
+                            <i class="fas fa-server me-2"></i>Device Management
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        {% if device_status %}
+                        <button class="btn btn-info w-100" onclick="pullLatestData(event)">
+                            <i class="fas fa-sync-alt me-2"></i>Sync Device Data
+                        </button>
+                        {% else %}
+                        <button class="btn btn-secondary w-100" disabled>
+                            <i class="fas fa-sync-alt me-2"></i>Device Offline
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Attendance -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Attendance Records
+                </h5>
+                <div>
+                    {% if device_status %}
+                    <button class="btn btn-sm btn-outline-success" onclick="pullLatestData(event)">
+                        <i class="fas fa-sync-alt me-2"></i>Sync Latest
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body">
+                {% if recent_records %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th><i class="fas fa-user me-1"></i>Employee Name</th>
+                                <th><i class="fas fa-calendar me-1"></i>Date</th>
+                                <th><i class="fas fa-clock me-1"></i>Check-in Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in recent_records %}
+                            <tr>
+                                <td>
+                                    <span class="badge bg-primary me-2">{{ record.name[0] }}</span>
+                                    {{ record.name }}
+                                </td>
+                                <td>
+                                    {% set timestamp = record.timestamp.split(' ') %}
+                                    <span class="text-muted">{{ timestamp[0] if timestamp|length > 1 else record.timestamp }}</span>
+                                </td>
+                                <td>
+                                    {% if record.check_in %}
+                                        {% set check_in = record.check_in.split(' ') %}
+                                        <span class="badge bg-success">{{ check_in[1] if check_in|length > 1 else record.check_in }}</span>
+                                    {% else %}
+                                        <span class="text-muted">N/A</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="/attendance" class="btn btn-outline-primary">
+                        <i class="fas fa-eye me-2"></i>View All Records
+                    </a>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">No attendance records found</p>
+                    {% if device_status %}
+                    <button class="btn btn-primary" onclick="pullLatestData(event)">
+                        <i class="fas fa-download me-2"></i>Pull Data from Device
+                    </button>
+                    {% else %}
+                    <a href="/device" class="btn btn-primary">
+                        <i class="fas fa-cog me-2"></i>Setup Device Connection
+                    </a>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>System Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-database fa-2x text-success me-3"></i>
+                            <div>
+                                <h6 class="mb-0">Database</h6>
+                                <small class="text-muted">SQLite - Operational</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="fas fa-server fa-2x text-info me-3"></i>
+                            <div>
+                                <h6 class="mb-0">Web Server</h6>
+                                <small class="text-muted">Flask - Running</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center mb-3">
+                            {% if device_status %}
+                            <i class="fas fa-wifi fa-2x text-success me-3"></i>
+                            <div>
+                                <h6 class="mb-0">Device</h6>
+                                <small class="text-muted">Connected - {{ device_ip }}</small>
+                            </div>
+                            {% else %}
+                            <i class="fas fa-wifi fa-2x text-danger me-3"></i>
+                            <div>
+                                <h6 class="mb-0">Device</h6>
+                                <small class="text-muted">Disconnected - {{ device_ip }}</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pullLatestData(event) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Syncing...';
+    button.disabled = true;
+    
+    // Pull latest data
+    fetch('/api/pull_latest_data', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(data.message, 'success');
+            // Refresh the page to show updated data
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showAlert(data.message, 'danger');
+            // Reset button
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        showAlert('Error syncing data: ' + error.message, 'danger');
+        // Reset button
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function refreshStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Update the stats numbers
+            document.querySelectorAll('.stats-number')[0].textContent = data.total_users;
+            document.querySelectorAll('.stats-number')[1].textContent = data.total_attendance;
+            document.querySelectorAll('.stats-number')[2].textContent = data.today_attendance;
+            
+            // Show success message
+            showAlert('Statistics refreshed successfully!', 'success');
+        })
+        .catch(error => {
+            showAlert('Error refreshing statistics', 'danger');
+        });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Find the first row element or fallback to container
+    const firstRow = document.querySelector('.row');
+    const container = document.querySelector('.container');
+    
+    if (firstRow && firstRow.parentNode === container) {
+        container.insertBefore(alertDiv, firstRow);
+    } else {
+        // Fallback: insert at the beginning of container
+        container.insertBefore(alertDiv, container.firstChild);
+    }
+    
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+// Auto-refresh stats every 30 seconds
+setInterval(refreshStats, 30000);
+</script>
+{% endblock %}
